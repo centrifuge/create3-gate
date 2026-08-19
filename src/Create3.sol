@@ -4,14 +4,6 @@ pragma solidity 0.8.28;
 /// @title  Create3
 /// @notice CREATE3 in the gate itself: a CREATE2 proxy whose only job is to CREATE the payload, so the
 ///         resulting address covers the deployer and the salt but not the init code.
-///
-/// @dev    The proxy init code is the one every CREATE3 implementation shares, byte for byte, and its runtime
-///         `0x363d3d37363d34f0` copies the calldata and CREATEs it. The payload therefore lands at the proxy's
-///         first nonce, which is what `addressOf` recomputes.
-///
-///         Deploying this way rather than through CreateX is what lets the salt be a whole 32 bytes: CreateX
-///         spends the first 21 of its own on a guardian and a redeploy flag, leaving 11 to separate one
-///         namespace from another. Here nothing is spent, so the separation is the full width of a hash.
 library Create3 {
     bytes internal constant PROXY_INIT_CODE = hex"67363d3d37363d34f03d5260086018f3";
     bytes32 internal constant PROXY_INIT_CODE_HASH = 0x21c35dbe1b344a2488cf3321d6ce542f8e9f305544ff09e4993a62319a497c1f;
