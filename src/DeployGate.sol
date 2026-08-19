@@ -17,11 +17,6 @@ import {IDeployGate} from "./IDeployGate.sol";
 ///         That rests on the gate being deployed through CREATE2, where the address covers the init code,
 ///         and not through CREATE3, where it does not: a CREATE3 gate address would be code anyone could
 ///         choose, and this contract's code is the whole of its authority.
-///
-///         The gate performs CREATE3 itself rather than calling out to CreateX, which is what lets a whole
-///         32 bytes separate one namespace from the next. Going through CreateX would spend the first 21 of
-///         its salt on a guardian and a redeploy flag and leave 11, so telling two namespaces apart would
-///         rest on 88 bits rather than on the full width of a hash.
 contract DeployGate is IDeployGate {
     mapping(address validator => mapping(bytes32 id => uint256)) public nonce;
     mapping(address validator => mapping(bytes32 id => uint256)) public deployed;
