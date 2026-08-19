@@ -1,0 +1,46 @@
+[profile.default]
+src = 'src'
+out = 'out'
+libs = ['lib']
+
+# The gate is deployed from a hardcoded init code, at an address derived from it, so what compiles it is part
+# of the artifact: change any of the settings below and both constants in script/DeployGate.d.sol move. They
+# match the consuming repositories on purpose, so that everyone's `type(DeployGate).creationCode` is the same
+# bytes. `testConstantsMatchTheBytecode` is what notices when they stop being.
+solc_version = "0.8.28"
+evm_version = "cancun"
+
+optimizer = true
+optimizer_runs = 1
+
+# {@see {@link https://github.com/foundry-rs/foundry/issues/4060} }
+auto_detect_remappings = false
+
+# Whether to store the referenced sources in the metadata as literal data. Helps with verification
+use_literal_content = true
+
+# The metadata hash is machine dependent. By default, this is set to none to allow for deterministic code.
+# {@see {@link https://docs.soliditylang.org/en/latest/metadata.html} }
+bytecode_hash = "none"
+cbor_metadata = false
+
+[profile.default.lint]
+severity = ["high"]
+
+[profile.default.fuzz]
+runs = 100
+max_test_rejects = 1_000_000 # Number of times `vm.assume` can fail
+
+[profile.ci.fuzz]
+runs = 1000
+max_test_rejects = 1_000_000
+
+[fmt]
+line_length = 120
+tab_width = 4
+bracket_spacing = false
+int_types = "long"
+multiline_func_header = "attributes_first"
+quote_style = "double"
+number_underscore = "preserve"
+wrap_comments = false
