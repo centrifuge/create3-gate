@@ -1,0 +1,35 @@
+name: "CI"
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+env:
+  FOUNDRY_PROFILE: ci
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.4.4
+
+      - name: Build contracts
+        run: |
+          forge --version
+          forge build --deny warnings
+
+      - name: Check formatting
+        run: forge fmt --check
+
+      # Includes testConstantsMatchTheBytecode, which is what holds script/DeployGate.d.sol to the contract
+      - name: Run tests
+        run: forge test -vvv
