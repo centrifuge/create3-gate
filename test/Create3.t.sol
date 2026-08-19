@@ -23,8 +23,14 @@ contract Reverting {
 
 /// @dev The library is internal, so it is exercised through a contract that deploys as the gate would
 contract Deployer {
-    function deploy(bytes32 salt, bytes memory initCode) external returns (address) {
+    function deploy(bytes32 salt, bytes memory initCode) external payable returns (address) {
         return Create3.deploy(salt, initCode);
+    }
+
+    function proxyOf(bytes32 salt) external view returns (address) {
+        return address(
+            uint160(uint256(keccak256(abi.encodePacked(hex"ff", address(this), salt, Create3.PROXY_INIT_CODE_HASH))))
+        );
     }
 
     function addressOf(bytes32 salt) external view returns (address) {
@@ -119,6 +125,19 @@ contract Create3Test is Test {
         deployer.deploy(salt, type(Reverting).creationCode);
 
         assertEq(Target(deployer.deploy(salt, _initCode(9))).value(), 9);
+    }
+
+    /// @dev Nothing is forwarded: the proxy is created with no value and called with none, so ether cannot
+    ///      end up stranded in either it or the contract it creates
+    function testDeployForwardsNoValue() public {
+        bytes32 salt = keccak256("v");
+        address proxy = deployer.proxyOf(salt);
+
+        address target = deployer.deploy{value: 1 ether}(salt, _initCode(1));
+
+        assertEq(proxy.balance, 0, "the proxy should hold nothing");
+        assertEq(target.balance, 0, "and neither should the contract");
+        assertEq(address(deployer).balance, 1 ether, "the value stays with the caller");
     }
 
     // The address

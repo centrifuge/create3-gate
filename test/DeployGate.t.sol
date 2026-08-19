@@ -108,6 +108,37 @@ contract DeployGateTest is Test, CreateXScript {
         assertEq(deployGate.validated(OTHER, ID, salts[0]), 0, "and nowhere else");
     }
 
+    /// @dev The predicate is the whole of who may commit, so it is worth pinning against widening rather than
+    ///      against one pair: anyone who is neither the validator nor one of its delegates is refused,
+    ///      whatever namespace is named and whatever else happens to be true of them
+    function testNobodyElseMayCommit(address caller, address validator) public {
+        vm.assume(caller != validator);
+        (bytes32[] memory salts,) = _pairs(1);
+
+        vm.prank(caller, caller);
+        vm.expectRevert(IDeployGate.NotValidator.selector);
+        deployGate.validate(validator, ID, salts, new bytes32[](1), _executors(EXECUTOR));
+    }
+
+    /// @dev Being the transaction's origin is not being the validator. The namespace is what addresses derive
+    ///      from, so what holds it has to be the immediate caller and nothing standing behind it
+    function testTheTransactionOriginMayNotCommit() public {
+        (bytes32[] memory salts,) = _pairs(1);
+
+        vm.prank(OTHER, VALIDATOR);
+        vm.expectRevert(IDeployGate.NotValidator.selector);
+        deployGate.validate(VALIDATOR, ID, salts, new bytes32[](1), _executors(EXECUTOR));
+    }
+
+    /// @dev The empty namespace is a namespace like any other, and belongs to nobody
+    function testNobodyMayCommitInTheEmptyNamespace() public {
+        (bytes32[] memory salts,) = _pairs(1);
+
+        vm.prank(OTHER);
+        vm.expectRevert(IDeployGate.NotValidator.selector);
+        deployGate.validate(address(0), ID, salts, new bytes32[](1), _executors(EXECUTOR));
+    }
+
     /// @dev Which is how a cold validator lets a warm key sign the phase without giving up its addresses
     function testDelegateMayCommitOnItsBehalf() public {
         (bytes32[] memory salts, bytes[] memory initCodes) = _pairs(1);
@@ -473,6 +504,23 @@ contract DeployGateTest is Test, CreateXScript {
         vm.prank(VALIDATOR);
         vm.expectRevert(IDeployGate.LengthMismatch.selector);
         deployGate.validate(VALIDATOR, ID, salts, new bytes32[](1), _executors(EXECUTOR));
+
+        // And the other way round, or the surplus hashes would be committed to nothing and silently dropped
+        vm.prank(VALIDATOR);
+        vm.expectRevert(IDeployGate.LengthMismatch.selector);
+        deployGate.validate(VALIDATOR, ID, new bytes32[](1), new bytes32[](2), _executors(EXECUTOR));
+    }
+
+    /// @dev What a commitment stores is what a deploy has to reproduce, so the encoding is part of the
+    ///      interface rather than an implementation detail. Both halves have to reach it at full width: an
+    ///      index that wrapped would let one position stand for another
+    function testCommitmentPinsItsEncoding(bytes32 initCodeHash, uint256 index) public view {
+        assertEq(deployGate.commitment(initCodeHash, index), keccak256(abi.encode(initCodeHash, index)));
+    }
+
+    function testCommitmentSeparatesEveryPosition(bytes32 initCodeHash) public view {
+        assertTrue(deployGate.commitment(initCodeHash, 0) != deployGate.commitment(initCodeHash, 256));
+        assertTrue(deployGate.commitment(initCodeHash, 0) != deployGate.commitment(initCodeHash, type(uint256).max));
     }
 
     /// @dev How a mistake is corrected before executing
