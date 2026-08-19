@@ -11,11 +11,18 @@ front: reviewing means watching it happen. And the key that signs it is the key 
 it cannot be a cold one, and it cannot be shared between two people without both of them being able to deploy
 whatever they like.
 
+The other half of the problem is arithmetic. The deployment this gate was built for is 56 contracts across
+eleven mainnets — 616 transactions, each signed by the deploying account: 616 device confirmations on a hardware
+wallet, or 616 proposals behind a multisig. A ceremony nobody can realistically get through is one that ends up
+being done by a hot key instead, which is how the account every address derives from becomes the least protected
+one in the deployment. Authorising a deployment wants a cold key signing once; sending it wants a warm key
+signing hundreds of times. One account cannot be both.
+
 The `DeployGate` splits that in two.
 
 | Phase | Who signs | What it does | Transactions |
 |---|---|---|---|
-| Validate | the **validator**, or one of its **delegates** | commits the `(salt, init code hash)` of every contract, in order, and names who may deploy them | **1**, whatever the contract count |
+| Validate | the **validator**, or one of its **delegates** | commits the `(salt, init code hash)` of every contract, in order, and names who may deploy them | **1 per chain**, whatever the contract count |
 | Deploy | any **executor** the commitment named | deploys the committed contracts, one at a time, and nothing else | one per contract |
 
 What comes out of that:
@@ -30,9 +37,13 @@ What comes out of that:
   of silently deploying something else.
 - **The executors need no trust**, so the phase can be split between keys, or picked up by a different one
   when a key becomes unavailable, without widening who can deploy what.
-- **The validator can be cold.** It is what addresses derive from, not what has to sign every transaction: it
-  signs one commitment, or delegates even that.
-- **Addresses are the same on every chain**, and the gate enforces that rather than the script.
+- **The signing burden follows the chain count, not the contract count.** The commitment is one transaction
+  however many contracts it covers (~2.9M gas for those 56), so the trusted account signs eleven times rather
+  than 616 — one per chain — and an executor key that can only produce what was committed sends the rest. That
+  is what makes a hardware wallet or a Safe a realistic validator, and even those eleven signatures can go to a
+  delegate.
+- **Addresses are the same on every chain**, and the gate enforces that rather than the script — so the eleven
+  commitments cover the same contracts at the same addresses, and are one thing to review rather than eleven.
 
 ## How it works
 
