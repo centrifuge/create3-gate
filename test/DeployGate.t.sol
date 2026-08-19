@@ -689,9 +689,16 @@ contract DeployGateBytecodeTest is Test, CreateXScript {
     /// @dev The address covers the *init* code, and the same init code can still return different runtime
     ///      code when a constructor reads state. This is what rules that out for the gate: no immutables and
     ///      nothing read, so the init code the address covers determines the runtime code as well
+    ///
+    ///      Skipped under coverage for the same reason as the constants above
     function testRuntimeCodeFollowsFromInitCode() public {
+        if (vm.isContext(VmSafe.ForgeContext.Coverage)) return;
+
         address deployed = CreateX.deployCreate2(DEPLOY_GATE_SALT, DEPLOY_GATE_BYTECODE);
 
+        // The pinned init code has to land on the pinned address, and carry the pinned runtime code
+        assertEq(deployed, DEPLOY_GATE_ADDRESS, "DEPLOY_GATE_ADDRESS is stale");
         assertEq(deployed.codehash, keccak256(type(DeployGate).runtimeCode), "runtime code should be fixed");
+        assertEq(deployed.codehash, DEPLOY_GATE_EXTCODEHASH, "DEPLOY_GATE_EXTCODEHASH is stale");
     }
 }
