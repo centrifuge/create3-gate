@@ -86,12 +86,11 @@ interface IDeployGate {
     /// @notice What a salt carries once committed, which a caller reproduces to deploy it
     function commitment(bytes32 initCodeHash, uint256 index) external pure returns (bytes32);
 
-    /// @notice CreateX salt that `validator` deploys `salt` under. Names the gate as its guardian, which is
-    ///         what makes CreateX scope the address to it, and holds the 21st byte at zero, which is what
-    ///         keeps the chain id out of it. That leaves 11 bytes to tell the validators apart, which is what
-    ///         the addresses of two of them are separated by. The commitment id is not in it: where a
-    ///         contract lands does not depend on which commitment authorised it.
-    function createXSalt(address validator, bytes32 salt) external view returns (bytes32);
+    /// @notice CREATE3 salt that `validator` deploys `salt` under, which is the whole of what separates one
+    ///         namespace from the next: 32 bytes, none of them spent on anything else. Nothing chain-specific
+    ///         goes into it, so a namespace is the same set of addresses on every chain. The commitment id is
+    ///         not in it either: where a contract lands does not depend on which commitment authorised it.
+    function namespaceSalt(address validator, bytes32 salt) external pure returns (bytes32);
 
     /// @notice Address `salt` deploys to in `validator`'s namespace, whether or not it has been deployed yet
     function addressOf(address validator, bytes32 salt) external view returns (address);

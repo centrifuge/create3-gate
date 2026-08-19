@@ -4,6 +4,7 @@ pragma solidity 0.8.28;
 import "forge-std/Test.sol";
 import {VmSafe} from "forge-std/Vm.sol";
 
+import {Create3} from "../src/Create3.sol";
 import {DeployGate} from "../src/DeployGate.sol";
 import {IDeployGate} from "../src/IDeployGate.sol";
 import {
@@ -285,11 +286,24 @@ contract DeployGateTest is Test, CreateXScript {
     }
 
     /// @dev The id scopes permission, never an address: where a contract lands is the validator and the salt
-    function testAddressIgnoresTheCommitmentId() public view {
-        bytes32 salt = _salt(1);
+    function testAddressIgnoresTheCommitmentId() public {
+        (bytes32[] memory salts, bytes[] memory initCodes) = _pairs(1);
+        address expected = deployGate.addressOf(VALIDATOR, salts[0]);
 
-        assertEq(deployGate.addressOf(VALIDATOR, salt), deployGate.addressOf(VALIDATOR, salt));
-        assertEq(deployGate.createXSalt(VALIDATOR, salt), deployGate.createXSalt(VALIDATOR, salt));
+        // The same salt, committed under two different ids, points at the same contract
+        _validate(salts, initCodes);
+        bytes32[] memory hashes = new bytes32[](1);
+        hashes[0] = keccak256(initCodes[0]);
+        vm.prank(VALIDATOR);
+        deployGate.validate(VALIDATOR, OTHER_ID, salts, hashes, _executors(EXECUTOR));
+
+        vm.prank(EXECUTOR);
+        assertEq(deployGate.deploy(VALIDATOR, ID, salts[0], initCodes[0]), expected);
+
+        // Whichever deploys first takes it, and the second finds the proxy already there
+        vm.prank(EXECUTOR);
+        vm.expectRevert(Create3.ProxyDeploymentFailed.selector);
+        deployGate.deploy(VALIDATOR, OTHER_ID, salts[0], initCodes[0]);
     }
 
     // Validate
@@ -554,36 +568,50 @@ contract DeployGateTest is Test, CreateXScript {
     /// @dev Init code is not part of the CREATE3 address derivation, only the caller and the salt are. This is
     ///      why the DeployGate keeps addresses stable when a contract is modified in a patch release, and
     ///      why the validated set has to commit to the init code.
-    function testAddressIgnoresInitCode() public view {
-        bytes32 salt = _salt(1);
+    function testAddressIgnoresInitCode() public {
+        bytes32[] memory salts = new bytes32[](1);
+        bytes[] memory initCodes = new bytes[](1);
+        salts[0] = _salt(1);
+        initCodes[0] = _initCode(1);
 
-        assertEq(
-            deployGate.addressOf(VALIDATOR, salt),
-            computeCreate3Address(deployGate.createXSalt(VALIDATOR, salt), address(deployGate))
-        );
+        address predicted = deployGate.addressOf(VALIDATOR, salts[0]);
+
+        // A different constructor argument is a different init code, and lands at the very same address
+        initCodes[0] = _initCode(42);
+        _validate(salts, initCodes);
+
+        vm.prank(EXECUTOR);
+        address target = deployGate.deploy(VALIDATOR, ID, salts[0], initCodes[0]);
+
+        assertEq(target, predicted, "init code must not reach the address");
+        assertEq(Target(target).value(), 42);
     }
 
-    /// @dev The gate names itself as the salt guardian, so CreateX derives the address from the gate as well
-    ///      as from the salt. Nobody else can produce that address, whatever salt they pass
+    /// @dev CREATE2 scopes the proxy to whoever deploys it, and the gate is the only thing that ever does.
+    ///      Handing the very same salt to CreateX, or to any other deployer, lands somewhere else
     function testAddressIsReachableOnlyThroughTheGate() public {
         bytes32 salt = _salt(64);
-        bytes32 createXSalt = deployGate.createXSalt(VALIDATOR, salt);
-
-        assertEq(address(bytes20(createXSalt)), address(deployGate), "the gate should be the salt guardian");
+        bytes32 namespaceSalt = deployGate.namespaceSalt(VALIDATOR, salt);
 
         vm.prank(makeAddr("squatter"));
-        address taken = create3(createXSalt, _initCode(1));
+        address taken = create3(namespaceSalt, _initCode(1));
 
         assertTrue(taken != deployGate.addressOf(VALIDATOR, salt), "should not be reachable from outside the gate");
     }
 
-    /// @dev The 21st byte asks CreateX for cross-chain redeploy protection, which folds the chain id into the
-    ///      address. Holding it at zero is what keeps a namespace equal across chains
+    /// @dev The whole 32 bytes separate one namespace from the next: nothing is spent on a guardian or on a
+    ///      redeploy flag, which is what the 11 bytes left inside a CreateX salt would have cost
+    function testNamespaceSaltIsFullWidth() public view {
+        assertEq(
+            deployGate.namespaceSalt(VALIDATOR, _salt(1)), keccak256(abi.encode(VALIDATOR, _salt(1))), "full 32 bytes"
+        );
+    }
+
+    /// @dev Nothing chain-specific reaches the salt or the derivation, which is what keeps a namespace equal
+    ///      across chains
     function testAddressIsTheSameOnEveryChain() public {
         bytes32 salt = _salt(65);
         address here = deployGate.addressOf(VALIDATOR, salt);
-
-        assertEq(deployGate.createXSalt(VALIDATOR, salt)[20], bytes1(0x0), "redeploy protection should stay off");
 
         vm.chainId(block.chainid + 1);
 
@@ -606,12 +634,28 @@ contract DeployGateTest is Test, CreateXScript {
         assertTrue(deployGate.addressOf(owner, salt) != deployGate.addressOf(other, salt));
     }
 
-    function testAddressMatchesCreateX() public view {
+    /// @dev The derivation, spelled out independently of the library: a CREATE2 proxy, then its first nonce
+    function testAddressMatchesTheCreate3Derivation() public view {
         bytes32 salt = _salt(1);
-        bytes32 guarded =
-            keccak256(abi.encodePacked(uint256(uint160(address(deployGate))), deployGate.createXSalt(VALIDATOR, salt)));
+        bytes32 namespaceSalt = deployGate.namespaceSalt(VALIDATOR, salt);
 
-        assertEq(deployGate.addressOf(VALIDATOR, salt), ICreateX(CREATEX_ADDRESS).computeCreate3Address(guarded));
+        address proxy = address(
+            uint160(
+                uint256(
+                    keccak256(
+                        abi.encodePacked(hex"ff", address(deployGate), namespaceSalt, Create3.PROXY_INIT_CODE_HASH)
+                    )
+                )
+            )
+        );
+        address expected = address(uint160(uint256(keccak256(abi.encodePacked(hex"d694", proxy, hex"01")))));
+
+        assertEq(deployGate.addressOf(VALIDATOR, salt), expected);
+    }
+
+    /// @dev The proxy init code hash is a constant, and it has to stay the hash of the init code
+    function testProxyInitCodeHashMatches() public pure {
+        assertEq(keccak256(Create3.PROXY_INIT_CODE), Create3.PROXY_INIT_CODE_HASH);
     }
 }
 

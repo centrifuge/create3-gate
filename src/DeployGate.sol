@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.28;
 
+import {Create3} from "./Create3.sol";
 import {IDeployGate} from "./IDeployGate.sol";
-
-import {ICreateX} from "createx-forge/script/ICreateX.sol";
 
 /// @title  DeployGate
 /// @notice Deploys a set of contracts through CreateX CREATE3 in two steps: a validator commits what may be
@@ -18,9 +17,12 @@ import {ICreateX} from "createx-forge/script/ICreateX.sol";
 ///         That rests on the gate being deployed through CREATE2, where the address covers the init code,
 ///         and not through CREATE3, where it does not: a CREATE3 gate address would be code anyone could
 ///         choose, and this contract's code is the whole of its authority.
+///
+///         The gate performs CREATE3 itself rather than calling out to CreateX, which is what lets a whole
+///         32 bytes separate one namespace from the next. Going through CreateX would spend the first 21 of
+///         its salt on a guardian and a redeploy flag and leave 11, so telling two namespaces apart would
+///         rest on 88 bits rather than on the full width of a hash.
 contract DeployGate is IDeployGate {
-    ICreateX public constant CREATE_X = ICreateX(0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed);
-
     mapping(address validator => mapping(bytes32 id => uint256)) public nonce;
     mapping(address validator => mapping(bytes32 id => uint256)) public deployed;
     mapping(address validator => mapping(address who => bool)) public isDelegate;
@@ -90,7 +92,7 @@ contract DeployGate is IDeployGate {
         delete _validated[validator][id][current][salt];
         ++deployed[validator][id];
 
-        target = CREATE_X.deployCreate3(createXSalt(validator, salt), initCode);
+        target = Create3.deploy(namespaceSalt(validator, salt), initCode);
         emit Deploy(validator, id, current, salt, target);
     }
 
@@ -114,17 +116,12 @@ contract DeployGate is IDeployGate {
     }
 
     /// @inheritdoc IDeployGate
-    function createXSalt(address validator, bytes32 salt) public view returns (bytes32) {
-        return
-            bytes32(
-                abi.encodePacked(bytes20(address(this)), bytes1(0x0), bytes11(keccak256(abi.encode(validator, salt))))
-            );
+    function namespaceSalt(address validator, bytes32 salt) public pure returns (bytes32) {
+        return keccak256(abi.encode(validator, salt));
     }
 
     /// @inheritdoc IDeployGate
     function addressOf(address validator, bytes32 salt) external view returns (address) {
-        bytes32 guarded = keccak256(abi.encodePacked(uint256(uint160(address(this))), createXSalt(validator, salt)));
-
-        return CREATE_X.computeCreate3Address(guarded);
+        return Create3.addressOf(namespaceSalt(validator, salt), address(this));
     }
 }
