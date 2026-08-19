@@ -134,15 +134,16 @@ contract — and exactly why the commitment has to bind the init code hash separ
 
 ### The gate's own address
 
-The gate is at `0x65FF49a07F1CB06A1158F8FC22411FF49Dd23c86` on every chain, and **anyone** can put it there. It
+The gate is at `0xAaBBc8292e0929619Ee73B8034E4ff916A5caabB` on every chain, and **anyone** can put it there. It
 takes no constructor arguments and grants its deployer nothing, so there is nothing to configure and no order
 to get right: the first run that needs a gate deploys it, the way a deployment makes sure CreateX is there.
 
 It is deployed through CreateX's `deployCreate2`, not `deployCreate3`, and that is what makes it safe for
 anyone to deploy: a CREATE2 address covers the init code, so the only contract that fits the gate's address is
 the gate. A CREATE3 gate address would be code anyone could choose, and this contract's code is the whole of
-its authority. The salt is zero throughout — no sender in the first 20 bytes, no redeploy protection in the
-21st — which is the one combination CreateX derives from the salt alone, so the address is the same everywhere.
+its authority. The salt is zero in every byte CreateX reads — no sender in the first 20, no redeploy protection
+in the 21st — which is the combination CreateX derives from the salt alone, so the address is the same
+everywhere.
 
 The one thing it does depend on is [CreateX](https://github.com/pcaversaccio/createx) being at
 `0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed` on the chain, which is what every deployment it makes goes
@@ -150,7 +151,7 @@ through.
 
 The gate's code is, by the same derivation, effectively frozen: changing `DeployGate.sol` — or the settings it
 is compiled with — produces a *different* gate at a *different* address, and every address derived from it
-moves. `testConstantsMatchTheBytecode` is what makes that visible rather than silent.
+moves.
 
 ## Layout
 
@@ -159,7 +160,7 @@ src/DeployGate.sol          the gate
 src/IDeployGate.sol         its interface, and where each call is documented in full
 script/DeployGate.d.sol     salt, address, extcodehash and creation code — what a consumer holds the gate by
 script/DeployGateScript.sol brings the gate up in a forge script or test, as CreateXScript does for CreateX
-test/DeployGate.t.sol       behaviour, plus the check that keeps DeployGate.d.sol honest
+test/DeployGate.t.sol       behaviour, plus the checks that keep DeployGate.d.sol honest
 ```
 
 The split between `src/` and `script/` mirrors [createx-forge](https://github.com/radeksvarz/createx-forge),
@@ -226,5 +227,5 @@ forge fmt
 ```
 
 `foundry.toml` pins the compiler settings the gate's bytecode was derived from. Changing them, or the contract,
-fails `testConstantsMatchTheBytecode` with the values to paste into `script/DeployGate.d.sol` — and moves every
-address the gate would ever produce, so it is a decision rather than a chore.
+moves both constants in `script/DeployGate.d.sol` — and with them every address the gate would ever produce, so
+it is a decision rather than a chore.
