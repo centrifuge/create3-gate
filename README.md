@@ -27,23 +27,17 @@ The `DeployGate` splits that in two.
 
 What comes out of that:
 
-- **The deployment is agreed to before it exists.** The commitment is one transaction, so it can be signed by
-  a multisig, read back from a single log, and reproduced by a second person off-chain before anyone signs it.
-  A commitment found to be wrong costs one re-validation, not a redeployment — nothing is deployed until the
-  second phase.
-- **The two phases are separated in time**, and that separation is what proves they agree: the deploy phase
-  rebuilds each init code from scratch and has to land on exactly what was committed, so anything
-  phase-dependent in a constructor argument (`msg.sender` is the classic) aborts with `NotValidated` instead
-  of silently deploying something else.
-- **The executors need no trust**, so the phase can be split between keys, or picked up by a different one
-  when a key becomes unavailable, without widening who can deploy what.
-- **The signing burden follows the chain count, not the contract count.** The commitment is one transaction
-  however many contracts it covers (~2.9M gas for those 56), so the trusted account signs eleven times rather
-  than 616 — one per chain — and an executor key that can only produce what was committed sends the rest. That
-  is what makes a hardware wallet or a Safe a realistic validator, and even those eleven signatures can go to a
-  delegate.
-- **Addresses are the same on every chain**, and the gate enforces that rather than the script — so the eleven
-  commitments cover the same contracts at the same addresses, and are one thing to review rather than eleven.
+- **The deployment is agreed to before it exists.** One transaction a multisig can sign, one log a reviewer can
+  read back, and nothing deployed until the phase after it — so a commitment found to be wrong costs a
+  re-validation rather than a redeployment.
+- **The trusted account signs once per chain**, whatever the contract count: eleven signatures rather than 616,
+  with an executor key that can only produce what was committed sending the rest. That is what makes a hardware
+  wallet or a Safe a realistic validator.
+- **The two phases have to agree.** The deploy phase rebuilds each init code from scratch and has to land on
+  exactly what was committed, so anything phase-dependent in a constructor argument (`msg.sender` is the
+  classic) aborts with `NotValidated` rather than deploying something else.
+- **Addresses are the same on every chain**, enforced by the gate rather than by the script, so the eleven
+  commitments are one thing to review rather than eleven.
 
 ## How it works
 
@@ -105,9 +99,6 @@ Three things all have to be committed for that to hold:
   — and the gate keeps a cursor per commitment, so a contract deployed out of turn reverts rather than landing
   early.
 
-The gate forwards no value, and holds none: a constructor that needs funding is funded afterwards, not by the
-deployment.
-
 ### Addresses
 
 CreateX derives a CREATE3 address from its caller and the salt. The caller is the gate, and the gate builds its
@@ -138,19 +129,14 @@ The gate is at `0x65FF49a07F1CB06A1158F8FC22411FF49Dd23c86` on every chain, and 
 takes no constructor arguments and grants its deployer nothing, so there is nothing to configure and no order
 to get right: the first run that needs a gate deploys it, the way a deployment makes sure CreateX is there.
 
-It is deployed through CreateX's `deployCreate2`, not `deployCreate3`, and that is what makes it safe for
-anyone to deploy: a CREATE2 address covers the init code, so the only contract that fits the gate's address is
-the gate. A CREATE3 gate address would be code anyone could choose, and this contract's code is the whole of
-its authority. The salt is zero throughout — no sender in the first 20 bytes, no redeploy protection in the
-21st — which is the one combination CreateX derives from the salt alone, so the address is the same everywhere.
+It is deployed through CreateX's `deployCreate2`, not `deployCreate3`, which is what makes that safe: a CREATE2
+address covers the init code, so the only contract that fits the gate's address is the gate — and this
+contract's code is the whole of its authority. The salt is zero throughout, the one combination CreateX derives
+from the salt alone, so the address is the same everywhere. It needs
+[CreateX](https://github.com/pcaversaccio/createx) at `0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed` on the chain.
 
-The one thing it does depend on is [CreateX](https://github.com/pcaversaccio/createx) being at
-`0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed` on the chain, which is what every deployment it makes goes
-through.
-
-The gate's code is, by the same derivation, effectively frozen: changing `DeployGate.sol` — or the settings it
-is compiled with — produces a *different* gate at a *different* address, and every address derived from it
-moves.
+The gate's code is, by the same derivation, effectively frozen: changing `DeployGate.sol`, or the settings it is
+compiled with, produces a different gate at a different address, and every address derived from it moves.
 
 ## Layout
 
@@ -183,7 +169,7 @@ contract MyDeployer is DeployGateScript {
     function validate() public {
         vm.startBroadcast();
 
-        setUpDeployGate(); // a missing gate is deployed here, as the transaction before the commitment
+        setUpDeployGate();
         gate.validate(validator, id, salts, initCodeHashes, executors);
 
         vm.stopBroadcast();
@@ -203,16 +189,12 @@ contract MyDeployer is DeployGateScript {
 ```
 
 CreateX itself has to be on the chain already: `setUpDeployGate` etches it on a local chain (id 31337) and
-refuses to continue anywhere else, since putting CreateX at its address takes its own presigned transaction
-rather than a call from a script. That is what lets an anvil fork rehearse the whole sequence with nothing set
-up beforehand.
+refuses to continue anywhere else, which is what lets an anvil fork rehearse the whole sequence from nothing.
 
-Either add this repository as a dependency, or **vendor `script/DeployGate.d.sol`** (and, if it is useful,
-`DeployGateScript.sol` and `IDeployGate.sol`) into the consuming repository — the way `CreateX.d.sol` is
-vendored from createx-forge. Vendoring is enough because nothing outside this repository ever compiles
-`DeployGate.sol`: the constants are bytes, the address is fixed on chain, and no compiler settings have to
-match. Only this repository compiles the gate, which is why the test that holds the constants to the contract
-lives here.
+Either add this repository as a dependency, or **vendor `script/DeployGate.d.sol`** into the consuming
+repository, the way `CreateX.d.sol` is vendored from createx-forge. Vendoring is enough because nothing outside
+this repository ever compiles `DeployGate.sol`: the constants are bytes and the address is fixed on chain, so no
+compiler settings have to match.
 
 Keep the two phases in separate runs. Rebuilding the init code in a fresh process is what proves the deploy
 phase agrees with what was committed; running both in one gives that up.

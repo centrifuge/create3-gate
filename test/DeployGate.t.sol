@@ -587,6 +587,88 @@ contract DeployGateTest is Test, CreateXScript {
         assertEq(Target(_deploy(corrected, correctedInitCodes)[0]).value(), 1);
     }
 
+    /// @dev The reset shows when the replacement names salts the interrupted run already deployed. The cursor
+    ///      goes back to the first entry, that entry's address already holds code, and CreateX refuses to
+    ///      deploy over it — while each entry is bound to its position, so an executor cannot step over the one
+    ///      that reverts. That commitment stalls where it stands, and it costs a signature rather than a
+    ///      deployment: nothing is deployed, no address is lost, and the next commitment replaces it whole, so
+    ///      naming the remainder picks the run straight back up
+    function testRevalidatingSaltsAlreadyDeployedStallsUntilTheRemainder() public {
+        (bytes32[] memory salts, bytes[] memory initCodes) = _pairs(4);
+        _validate(salts, initCodes);
+
+        for (uint256 i; i < 2; i++) {
+            vm.prank(EXECUTOR);
+            deployGate.deploy(VALIDATOR, ID, salts[i], initCodes[i]);
+        }
+
+        // The whole set committed again, which is what correcting one entry naively comes to
+        _validate(salts, initCodes);
+        assertEq(deployGate.deployed(VALIDATOR, ID), 0, "back to the first entry");
+
+        // Whose address is taken, so CreateX is what stops it rather than the gate
+        vm.prank(EXECUTOR);
+        vm.expectRevert(abi.encodeWithSelector(ICreateX.FailedContractCreation.selector, CREATEX_ADDRESS));
+        deployGate.deploy(VALIDATOR, ID, salts[0], initCodes[0]);
+
+        // And nothing behind it is reachable, because position is part of what was committed
+        vm.prank(EXECUTOR);
+        vm.expectRevert(abi.encodeWithSelector(IDeployGate.NotValidated.selector, salts[2]));
+        deployGate.deploy(VALIDATOR, ID, salts[2], initCodes[2]);
+
+        assertEq(deployGate.deployed(VALIDATOR, ID), 0, "the cursor cannot move past a taken address");
+
+        // Having done it costs nothing but the signature that undoes it
+        bytes32[] memory left = new bytes32[](2);
+        bytes32[] memory leftHashes = new bytes32[](2);
+        bytes[] memory leftInitCodes = new bytes[](2);
+        for (uint256 i; i < 2; i++) {
+            left[i] = salts[i + 2];
+            leftInitCodes[i] = initCodes[i + 2];
+            leftHashes[i] = keccak256(leftInitCodes[i]);
+        }
+
+        vm.prank(VALIDATOR);
+        deployGate.validate(VALIDATOR, ID, left, leftHashes, _executors(EXECUTOR));
+
+        for (uint256 i; i < 2; i++) {
+            vm.prank(EXECUTOR);
+            address deployed = deployGate.deploy(VALIDATOR, ID, left[i], leftInitCodes[i]);
+
+            assertEq(deployed, deployGate.addressOf(VALIDATOR, left[i]), "the intended address, still");
+            assertEq(Target(deployed).value(), i + 3);
+        }
+
+        assertEq(deployGate.deployed(VALIDATOR, ID), 2, "the deployment finished after the stall");
+    }
+
+    /// @dev Which is a property of the entry, not of the commitment: what sits before the taken address
+    ///      deploys as usual, and the sequence stops dead when it reaches it
+    function testTheCursorStopsAtTheFirstAddressAlreadyTaken() public {
+        (bytes32[] memory salts, bytes[] memory initCodes) = _pairs(1);
+        _validate(salts, initCodes);
+        _deploy(salts, initCodes);
+
+        // A commitment putting a contract that has never been deployed ahead of one that has
+        bytes32[] memory next = new bytes32[](2);
+        bytes[] memory nextInitCodes = new bytes[](2);
+        next[0] = _salt(400);
+        nextInitCodes[0] = _initCode(400);
+        next[1] = salts[0];
+        nextInitCodes[1] = initCodes[0];
+        _validate(next, nextInitCodes);
+
+        vm.prank(EXECUTOR);
+        assertEq(Target(deployGate.deploy(VALIDATOR, ID, next[0], nextInitCodes[0])).value(), 400);
+        assertEq(deployGate.deployed(VALIDATOR, ID), 1, "the fresh entry goes through");
+
+        vm.prank(EXECUTOR);
+        vm.expectRevert(abi.encodeWithSelector(ICreateX.FailedContractCreation.selector, CREATEX_ADDRESS));
+        deployGate.deploy(VALIDATOR, ID, next[1], nextInitCodes[1]);
+
+        assertEq(deployGate.deployed(VALIDATOR, ID), 1, "and the sequence stops where the address is taken");
+    }
+
     function testDeployConsumesTheValidation() public {
         (bytes32[] memory salts, bytes[] memory initCodes) = _pairs(1);
         _validate(salts, initCodes);
