@@ -7,20 +7,8 @@ import {VmSafe} from "forge-std/Vm.sol";
 import {DeployGate} from "../src/DeployGate.sol";
 import {IDeployGate} from "../src/IDeployGate.sol";
 import {DeployGateScript} from "../script/DeployGateScript.sol";
-import {
-    DEPLOY_GATE_SALT,
-    DEPLOY_GATE_ADDRESS,
-    DEPLOY_GATE_BYTECODE,
-    DEPLOY_GATE_EXTCODEHASH
-} from "../script/DeployGate.d.sol";
-
-contract Target {
-    uint256 public value;
-
-    constructor(uint256 value_) {
-        value = value_;
-    }
-}
+import {DEPLOY_GATE_ADDRESS, DEPLOY_GATE_EXTCODEHASH} from "../script/DeployGate.d.sol";
+import {Target, initCodeFor} from "./Target.sol";
 
 /// @dev The consumer entry point, exercised the way a deployment script uses it. Nothing here compiles
 ///      DeployGate.sol for the deployment itself: the constants are the whole of what it deploys from, which
@@ -32,10 +20,6 @@ contract DeployGateScriptTest is Test, DeployGateScript {
     /// @dev `setUpDeployGate` is internal, so it needs a frame of its own for a revert to be expectable
     function callSetUpDeployGate() external {
         setUpDeployGate();
-    }
-
-    function _initCode(uint256 value) internal pure returns (bytes memory) {
-        return abi.encodePacked(type(Target).creationCode, abi.encode(value));
     }
 
     /// @dev A chain with no gate gets one, at the address the constant names
@@ -93,7 +77,7 @@ contract DeployGateScriptTest is Test, DeployGateScript {
         bytes32[] memory salts = new bytes32[](1);
         bytes32[] memory hashes = new bytes32[](1);
         address[] memory executors = new address[](1);
-        bytes memory initCode = _initCode(11);
+        bytes memory initCode = initCodeFor(11);
         salts[0] = bytes32(uint256(1));
         hashes[0] = keccak256(initCode);
         executors[0] = EXECUTOR;

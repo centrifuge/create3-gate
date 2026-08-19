@@ -6,6 +6,7 @@ import {VmSafe} from "forge-std/Vm.sol";
 
 import {Create3} from "../src/Create3.sol";
 import {DeployGate} from "../src/DeployGate.sol";
+import {Target, initCodeFor} from "./Target.sol";
 import {IDeployGate} from "../src/IDeployGate.sol";
 import {
     DEPLOY_GATE_SALT,
@@ -14,17 +15,8 @@ import {
     DEPLOY_GATE_EXTCODEHASH
 } from "../script/DeployGate.d.sol";
 
-import {ICreateX} from "createx-forge/script/ICreateX.sol";
 import {CREATEX_ADDRESS} from "createx-forge/script/CreateX.d.sol";
 import {CreateXScript} from "createx-forge/script/CreateXScript.sol";
-
-contract Target {
-    uint256 public value;
-
-    constructor(uint256 value_) {
-        value = value_;
-    }
-}
 
 contract DeployGateTest is Test, CreateXScript {
     address immutable VALIDATOR = address(this);
@@ -44,13 +36,20 @@ contract DeployGateTest is Test, CreateXScript {
         deployGate = new DeployGate();
     }
 
-    /// @dev A gated salt is any 32 bytes: the gate is what turns it into a CreateX salt
+    /// @dev A gated salt is any 32 bytes: the gate is what turns it into a CREATE3 salt
     function _salt(uint88 name) internal pure returns (bytes32) {
         return bytes32(uint256(name));
     }
 
     function _initCode(uint256 value) internal pure returns (bytes memory) {
-        return abi.encodePacked(type(Target).creationCode, abi.encode(value));
+        return initCodeFor(value);
+    }
+
+    function _hashes(bytes[] memory initCodes) internal pure returns (bytes32[] memory hashes) {
+        hashes = new bytes32[](initCodes.length);
+        for (uint256 i; i < initCodes.length; i++) {
+            hashes[i] = keccak256(initCodes[i]);
+        }
     }
 
     function _pairs(uint256 length) internal pure returns (bytes32[] memory salts, bytes[] memory initCodes) {
@@ -69,13 +68,8 @@ contract DeployGateTest is Test, CreateXScript {
     }
 
     function _validate(bytes32[] memory salts, bytes[] memory initCodes) internal {
-        bytes32[] memory initCodeHashes = new bytes32[](initCodes.length);
-        for (uint256 i; i < initCodes.length; i++) {
-            initCodeHashes[i] = keccak256(initCodes[i]);
-        }
-
         vm.prank(VALIDATOR);
-        deployGate.validate(VALIDATOR, ID, salts, initCodeHashes, _executors(EXECUTOR));
+        deployGate.validate(VALIDATOR, ID, salts, _hashes(initCodes), _executors(EXECUTOR));
     }
 
     function _deploy(bytes32[] memory salts, bytes[] memory initCodes) internal returns (address[] memory targets) {
@@ -96,8 +90,7 @@ contract DeployGateTest is Test, CreateXScript {
     /// @dev A namespace is reachable by the account it is named after, and by nobody else until it says so
     function testOnlyTheValidatorMayCommit() public {
         (bytes32[] memory salts, bytes[] memory initCodes) = _pairs(1);
-        bytes32[] memory hashes = new bytes32[](1);
-        hashes[0] = keccak256(initCodes[0]);
+        bytes32[] memory hashes = _hashes(initCodes);
 
         vm.prank(OTHER);
         vm.expectRevert(IDeployGate.NotValidator.selector);
@@ -118,6 +111,12 @@ contract DeployGateTest is Test, CreateXScript {
         vm.prank(caller, caller);
         vm.expectRevert(IDeployGate.NotValidator.selector);
         deployGate.validate(validator, ID, salts, new bytes32[](1), _executors(EXECUTOR));
+
+        // Including the empty namespace, which belongs to nobody rather than to everybody. Named rather than
+        // fuzzed, since the caller that *is* address(0) holds that namespace like any other account holds its
+        vm.prank(OTHER, OTHER);
+        vm.expectRevert(IDeployGate.NotValidator.selector);
+        deployGate.validate(address(0), ID, salts, new bytes32[](1), _executors(EXECUTOR));
     }
 
     /// @dev Being the transaction's origin is not being the validator. The namespace is what addresses derive
@@ -130,20 +129,10 @@ contract DeployGateTest is Test, CreateXScript {
         deployGate.validate(VALIDATOR, ID, salts, new bytes32[](1), _executors(EXECUTOR));
     }
 
-    /// @dev The empty namespace is a namespace like any other, and belongs to nobody
-    function testNobodyMayCommitInTheEmptyNamespace() public {
-        (bytes32[] memory salts,) = _pairs(1);
-
-        vm.prank(OTHER);
-        vm.expectRevert(IDeployGate.NotValidator.selector);
-        deployGate.validate(address(0), ID, salts, new bytes32[](1), _executors(EXECUTOR));
-    }
-
     /// @dev Which is how a cold validator lets a warm key sign the phase without giving up its addresses
     function testDelegateMayCommitOnItsBehalf() public {
         (bytes32[] memory salts, bytes[] memory initCodes) = _pairs(1);
-        bytes32[] memory hashes = new bytes32[](1);
-        hashes[0] = keccak256(initCodes[0]);
+        bytes32[] memory hashes = _hashes(initCodes);
 
         vm.prank(VALIDATOR);
         deployGate.setDelegate(DELEGATE, true);
@@ -240,8 +229,7 @@ contract DeployGateTest is Test, CreateXScript {
         _validate(salts, initCodes);
         assertTrue(deployGate.isExecutor(VALIDATOR, ID, EXECUTOR), "named by the first commitment");
 
-        bytes32[] memory hashes = new bytes32[](1);
-        hashes[0] = keccak256(initCodes[0]);
+        bytes32[] memory hashes = _hashes(initCodes);
 
         vm.prank(VALIDATOR);
         deployGate.validate(VALIDATOR, ID, salts, hashes, _executors(other));
@@ -374,8 +362,7 @@ contract DeployGateTest is Test, CreateXScript {
 
         // The same salt, committed under two different ids, points at the same contract
         _validate(salts, initCodes);
-        bytes32[] memory hashes = new bytes32[](1);
-        hashes[0] = keccak256(initCodes[0]);
+        bytes32[] memory hashes = _hashes(initCodes);
         vm.prank(VALIDATOR);
         deployGate.validate(VALIDATOR, OTHER_ID, salts, hashes, _executors(EXECUTOR));
 
@@ -384,7 +371,7 @@ contract DeployGateTest is Test, CreateXScript {
 
         // Whichever deploys first takes it, and the second finds the proxy already there
         vm.prank(EXECUTOR);
-        vm.expectRevert(Create3.ProxyDeploymentFailed.selector);
+        vm.expectRevert(IDeployGate.ProxyDeploymentFailed.selector);
         deployGate.deploy(VALIDATOR, OTHER_ID, salts[0], initCodes[0]);
     }
 
@@ -427,7 +414,7 @@ contract DeployGateTest is Test, CreateXScript {
 
     /// @dev A repeated salt would leave one storage entry behind two Validate events, so an off-chain reader
     ///      rebuilding the commitment from the log would see a hash that was never enforceable. The deploy
-    ///      script cannot produce one (its local walk deploys at the salt, so the second reverts at CreateX),
+    ///      script cannot produce one (its local walk deploys at the salt, so the second reverts on the proxy),
     ///      but `validate` is callable with any calldata, so it refuses rather than letting the last one win
     function testValidateRejectsDuplicateSalts() public {
         (bytes32[] memory salts, bytes[] memory initCodes) = _pairs(2);
@@ -463,9 +450,7 @@ contract DeployGateTest is Test, CreateXScript {
         address other = makeAddr("otherExecutor");
 
         (bytes32[] memory salts, bytes[] memory initCodes) = _pairs(2);
-        bytes32[] memory hashes = new bytes32[](2);
-        hashes[0] = keccak256(initCodes[0]);
-        hashes[1] = keccak256(initCodes[1]);
+        bytes32[] memory hashes = _hashes(initCodes);
 
         address[] memory executors = new address[](2);
         executors[0] = EXECUTOR;
@@ -516,11 +501,6 @@ contract DeployGateTest is Test, CreateXScript {
     ///      index that wrapped would let one position stand for another
     function testCommitmentPinsItsEncoding(bytes32 initCodeHash, uint256 index) public view {
         assertEq(deployGate.commitment(initCodeHash, index), keccak256(abi.encode(initCodeHash, index)));
-    }
-
-    function testCommitmentSeparatesEveryPosition(bytes32 initCodeHash) public view {
-        assertTrue(deployGate.commitment(initCodeHash, 0) != deployGate.commitment(initCodeHash, 256));
-        assertTrue(deployGate.commitment(initCodeHash, 0) != deployGate.commitment(initCodeHash, type(uint256).max));
     }
 
     /// @dev How a mistake is corrected before executing
@@ -650,7 +630,7 @@ contract DeployGateTest is Test, CreateXScript {
     }
 
     /// @dev The reset shows when the replacement names salts the interrupted run already deployed. The cursor
-    ///      goes back to the first entry, that entry's address already holds code, and CreateX refuses to
+    ///      goes back to the first entry, that entry's address already holds code, and the proxy refuses to
     ///      deploy over it — while each entry is bound to its position, so an executor cannot step over the one
     ///      that reverts. That commitment stalls where it stands, and it costs a signature rather than a
     ///      deployment: nothing is deployed, no address is lost, and the next commitment replaces it whole, so
@@ -670,7 +650,7 @@ contract DeployGateTest is Test, CreateXScript {
 
         // Whose address is taken, so the CREATE3 proxy is what stops it rather than the gate
         vm.prank(EXECUTOR);
-        vm.expectRevert(Create3.ProxyDeploymentFailed.selector);
+        vm.expectRevert(IDeployGate.ProxyDeploymentFailed.selector);
         deployGate.deploy(VALIDATOR, ID, salts[0], initCodes[0]);
 
         // And nothing behind it is reachable, because position is part of what was committed
@@ -725,7 +705,7 @@ contract DeployGateTest is Test, CreateXScript {
         assertEq(deployGate.deployed(VALIDATOR, ID), 1, "the fresh entry goes through");
 
         vm.prank(EXECUTOR);
-        vm.expectRevert(Create3.ProxyDeploymentFailed.selector);
+        vm.expectRevert(IDeployGate.ProxyDeploymentFailed.selector);
         deployGate.deploy(VALIDATOR, ID, next[1], nextInitCodes[1]);
 
         assertEq(deployGate.deployed(VALIDATOR, ID), 1, "and the sequence stops where the address is taken");
@@ -799,7 +779,7 @@ contract DeployGateTest is Test, CreateXScript {
         assertEq(deployGate.addressOf(VALIDATOR, salt), here, "the chain id must not reach the address");
     }
 
-    /// @dev CreateX scopes the address to the caller, which is the gate, so two of them share nothing. Only
+    /// @dev CREATE2 scopes the proxy to its deployer, which is the gate, so two of them share nothing. Only
     ///      one is ever deployed, but that is what makes the address the gate's to give rather than anyone's
     function testAddressDependsOnTheGate() public {
         bytes32 salt = _salt(1);
@@ -818,20 +798,13 @@ contract DeployGateTest is Test, CreateXScript {
     /// @dev The derivation, spelled out independently of the library: a CREATE2 proxy, then its first nonce
     function testAddressMatchesTheCreate3Derivation() public view {
         bytes32 salt = _salt(1);
-        bytes32 namespaceSalt = deployGate.namespaceSalt(VALIDATOR, salt);
 
-        address proxy = address(
-            uint160(
-                uint256(
-                    keccak256(
-                        abi.encodePacked(hex"ff", address(deployGate), namespaceSalt, Create3.PROXY_INIT_CODE_HASH)
-                    )
-                )
-            )
-        );
-        address expected = address(uint160(uint256(keccak256(abi.encodePacked(hex"d694", proxy, hex"01")))));
+        // Spelled out end to end, and through Foundry rather than through the gate: the namespace salt, the
+        // proxy it names, and the payload at the proxy's first nonce
+        bytes32 namespaceSalt = keccak256(abi.encode(VALIDATOR, salt));
+        address proxy = vm.computeCreate2Address(namespaceSalt, Create3.PROXY_INIT_CODE_HASH, address(deployGate));
 
-        assertEq(deployGate.addressOf(VALIDATOR, salt), expected);
+        assertEq(deployGate.addressOf(VALIDATOR, salt), vm.computeCreateAddress(proxy, 1));
     }
 
     /// @dev The proxy init code hash is a constant, and it has to stay the hash of the init code

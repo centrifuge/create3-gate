@@ -18,6 +18,10 @@ interface IDeployGate {
     error LengthMismatch();
     error NotValidated(bytes32 salt);
     error DuplicateSalt(bytes32 salt);
+    /// @dev The salt is already spent: something stands at the address it names
+    error ProxyDeploymentFailed();
+    /// @dev The init code did not leave a contract behind, having reverted or returned nothing
+    error ContractDeploymentFailed();
 
     //----------------------------------------------------------------------------------------------
     // Validation
@@ -37,7 +41,7 @@ interface IDeployGate {
     /// @param  id Which of the validator's commitments this is. Any 32 bytes, chosen by the caller. It scopes
     ///         permission only: two commitments naming the same salt still point at the same address, and
     ///         whichever deploys first takes it
-    /// @param  salts Salt of each contract, in deployment order. Any 32 bytes: the CreateX salt is derived
+    /// @param  salts Salt of each contract, in deployment order. Any 32 bytes: the CREATE3 salt is derived
     /// @param  initCodeHashes Hash of the creation code, including constructor arguments, of each contract
     /// @param  executors Accounts allowed to deploy this commitment, and nothing else. None of them has to be
     ///         the validator, and none gains any privilege beyond deploying exactly what is committed here

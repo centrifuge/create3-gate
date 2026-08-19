@@ -5,7 +5,7 @@ import {Create3} from "./Create3.sol";
 import {IDeployGate} from "./IDeployGate.sol";
 
 /// @title  DeployGate
-/// @notice Deploys a set of contracts through CreateX CREATE3 in two steps: a validator commits what may be
+/// @notice Deploys a set of contracts through CREATE3 in two steps: a validator commits what may be
 ///         deployed, where, in what order and by whom, and any of the executors it named then deploys it.
 ///         Committing is one transaction whatever the contract count, and an executor gains no privilege
 ///         beyond deploying exactly what was committed.

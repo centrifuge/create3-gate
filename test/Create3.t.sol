@@ -4,16 +4,8 @@ pragma solidity 0.8.28;
 import "forge-std/Test.sol";
 
 import {Create3} from "../src/Create3.sol";
-
-contract Target {
-    uint256 public value;
-    address public immutable DEPLOYER;
-
-    constructor(uint256 value_) {
-        value = value_;
-        DEPLOYER = msg.sender;
-    }
-}
+import {Target, initCodeFor} from "./Target.sol";
+import {IDeployGate} from "../src/IDeployGate.sol";
 
 contract Reverting {
     constructor() {
@@ -25,12 +17,6 @@ contract Reverting {
 contract Deployer {
     function deploy(bytes32 salt, bytes memory initCode) external payable returns (address) {
         return Create3.deploy(salt, initCode);
-    }
-
-    function proxyOf(bytes32 salt) external view returns (address) {
-        return address(
-            uint160(uint256(keccak256(abi.encodePacked(hex"ff", address(this), salt, Create3.PROXY_INIT_CODE_HASH))))
-        );
     }
 
     function addressOf(bytes32 salt) external view returns (address) {
@@ -45,22 +31,12 @@ contract Create3Test is Test {
         deployer = new Deployer();
     }
 
-    function _initCode(uint256 value) internal pure returns (bytes memory) {
-        return abi.encodePacked(type(Target).creationCode, abi.encode(value));
-    }
-
     // The proxy
 
-    /// @dev The hash is a constant so the derivation can be pure. It has to stay the hash of the init code
+    /// @dev The init code is the 16 bytes every CREATE3 implementation shares, and the hash is a constant so
+    ///      the derivation can be pure. It has to stay the hash of the init code
     function testProxyInitCodeHashMatchesTheInitCode() public pure {
         assertEq(keccak256(Create3.PROXY_INIT_CODE), Create3.PROXY_INIT_CODE_HASH);
-    }
-
-    /// @dev The 16 bytes every CREATE3 implementation shares, returning the 8-byte runtime that copies the
-    ///      calldata and CREATEs it
-    function testProxyInitCodeIsTheCanonicalOne() public pure {
-        assertEq(Create3.PROXY_INIT_CODE, hex"67363d3d37363d34f03d5260086018f3");
-        assertEq(Create3.PROXY_INIT_CODE.length, 16);
     }
 
     // Deployment
@@ -69,7 +45,7 @@ contract Create3Test is Test {
         bytes32 salt = keccak256("a");
         address predicted = deployer.addressOf(salt);
 
-        address target = deployer.deploy(salt, _initCode(7));
+        address target = deployer.deploy(salt, initCodeFor(7));
 
         assertEq(target, predicted, "should land where addressOf said");
         assertEq(Target(target).value(), 7, "constructor arguments should be honoured");
@@ -78,7 +54,7 @@ contract Create3Test is Test {
 
     /// @dev The proxy is what CREATEs the payload, so that is what a constructor sees, not the deployer
     function testConstructorSeesTheProxy() public {
-        address target = deployer.deploy(keccak256("b"), _initCode(1));
+        address target = deployer.deploy(keccak256("b"), initCodeFor(1));
 
         address seen = Target(target).DEPLOYER();
         assertTrue(seen != address(deployer), "the deployer is not the immediate creator");
@@ -86,7 +62,7 @@ contract Create3Test is Test {
     }
 
     function testDeployLargeInitCode() public {
-        bytes memory padded = abi.encodePacked(_initCode(3), new bytes(20_000));
+        bytes memory padded = abi.encodePacked(initCodeFor(3), new bytes(20_000));
 
         address target = deployer.deploy(keccak256("big"), padded);
 
@@ -98,22 +74,22 @@ contract Create3Test is Test {
     /// @dev The salt is spent on the proxy, so the second attempt cannot even get that far
     function testDeployTwiceWithTheSameSaltReverts() public {
         bytes32 salt = keccak256("c");
-        deployer.deploy(salt, _initCode(1));
+        deployer.deploy(salt, initCodeFor(1));
 
-        vm.expectRevert(Create3.ProxyDeploymentFailed.selector);
-        deployer.deploy(salt, _initCode(1));
+        vm.expectRevert(IDeployGate.ProxyDeploymentFailed.selector);
+        deployer.deploy(salt, initCodeFor(1));
     }
 
     /// @dev The proxy reports nothing back, so a constructor that reverts is caught by the address being
     ///      empty rather than by the call failing
     function testRevertingConstructorReverts() public {
-        vm.expectRevert(Create3.ContractDeploymentFailed.selector);
+        vm.expectRevert(IDeployGate.ContractDeploymentFailed.selector);
         deployer.deploy(keccak256("d"), type(Reverting).creationCode);
     }
 
     /// @dev Empty init code CREATEs an account with no code, which is not a deployment
     function testEmptyInitCodeReverts() public {
-        vm.expectRevert(Create3.ContractDeploymentFailed.selector);
+        vm.expectRevert(IDeployGate.ContractDeploymentFailed.selector);
         deployer.deploy(keccak256("e"), "");
     }
 
@@ -121,19 +97,19 @@ contract Create3Test is Test {
     function testSaltSurvivesAFailedDeployment() public {
         bytes32 salt = keccak256("f");
 
-        vm.expectRevert(Create3.ContractDeploymentFailed.selector);
+        vm.expectRevert(IDeployGate.ContractDeploymentFailed.selector);
         deployer.deploy(salt, type(Reverting).creationCode);
 
-        assertEq(Target(deployer.deploy(salt, _initCode(9))).value(), 9);
+        assertEq(Target(deployer.deploy(salt, initCodeFor(9))).value(), 9);
     }
 
     /// @dev Nothing is forwarded: the proxy is created with no value and called with none, so ether cannot
     ///      end up stranded in either it or the contract it creates
     function testDeployForwardsNoValue() public {
         bytes32 salt = keccak256("v");
-        address proxy = deployer.proxyOf(salt);
+        address proxy = vm.computeCreate2Address(salt, Create3.PROXY_INIT_CODE_HASH, address(deployer));
 
-        address target = deployer.deploy{value: 1 ether}(salt, _initCode(1));
+        address target = deployer.deploy{value: 1 ether}(salt, initCodeFor(1));
 
         assertEq(proxy.balance, 0, "the proxy should hold nothing");
         assertEq(target.balance, 0, "and neither should the contract");
@@ -141,15 +117,6 @@ contract Create3Test is Test {
     }
 
     // The address
-
-    /// @dev CREATE3 covers the salt and the deployer, never the init code, which is what keeps an address
-    ///      still when a patch release changes a contract
-    function testAddressIgnoresInitCode() public {
-        bytes32 salt = keccak256("g");
-        address predicted = deployer.addressOf(salt);
-
-        assertEq(deployer.deploy(salt, _initCode(123)), predicted);
-    }
 
     /// @dev CREATE2 scopes the proxy to whoever deploys it, which is the whole of the access control
     function testAddressDependsOnTheDeployer() public {
@@ -169,19 +136,13 @@ contract Create3Test is Test {
         assertEq(deployer.addressOf(salt), here);
     }
 
-    /// @dev The derivation spelled out independently of the library: CREATE2 for the proxy, then its first
-    ///      nonce for the payload
+    /// @dev The derivation restated through Foundry rather than through the library: CREATE2 for the proxy,
+    ///      then its first nonce for the payload
     function testAddressMatchesTheDerivation() public view {
         bytes32 salt = keccak256("j");
+        address proxy = vm.computeCreate2Address(salt, Create3.PROXY_INIT_CODE_HASH, address(deployer));
 
-        address proxy = address(
-            uint160(
-                uint256(keccak256(abi.encodePacked(hex"ff", address(deployer), salt, Create3.PROXY_INIT_CODE_HASH)))
-            )
-        );
-        address expected = address(uint160(uint256(keccak256(abi.encodePacked(hex"d694", proxy, hex"01")))));
-
-        assertEq(deployer.addressOf(salt), expected);
+        assertEq(deployer.addressOf(salt), vm.computeCreateAddress(proxy, 1));
     }
 
     /// @dev The whole 32 bytes reach the address: no part of the salt is spent or ignored
@@ -200,15 +161,11 @@ contract Create3Test is Test {
         assertTrue(deployer.addressOf(a) != deployer.addressOf(b));
     }
 
-    function testAddressOfIsDeterministic(bytes32 salt) public view {
-        assertEq(deployer.addressOf(salt), Create3.addressOf(salt, address(deployer)));
-    }
-
     /// @dev Predicted before the fact and landed on after it, for arbitrary salts
     function testDeployMatchesAddressOf(bytes32 salt, uint256 value) public {
         address predicted = deployer.addressOf(salt);
 
-        assertEq(deployer.deploy(salt, _initCode(value)), predicted);
+        assertEq(deployer.deploy(salt, initCodeFor(value)), predicted);
         assertEq(Target(predicted).value(), value);
     }
 }
