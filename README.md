@@ -150,7 +150,7 @@ through.
 
 The gate's code is, by the same derivation, effectively frozen: changing `DeployGate.sol` — or the settings it
 is compiled with — produces a *different* gate at a *different* address, and every address derived from it
-moves. `testConstantsMatchTheBytecode` is what makes that visible rather than silent.
+moves.
 
 ## Layout
 
@@ -226,5 +226,5 @@ forge fmt
 ```
 
 `foundry.toml` pins the compiler settings the gate's bytecode was derived from. Changing them, or the contract,
-fails `testConstantsMatchTheBytecode` with the values to paste into `script/DeployGate.d.sol` — and moves every
-address the gate would ever produce, so it is a decision rather than a chore.
+moves the constants in `script/DeployGate.d.sol` — and with them every address the gate would ever produce, so it
+is a decision rather than a chore.

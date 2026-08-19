@@ -270,6 +270,57 @@ contract DeployGateTest is Test, CreateXScript {
         assertEq(Target(_deploy(salts, initCodes)[0]).value(), 1, "and still deploys from its own first position");
     }
 
+    /// @dev A commitment binds each contract to its position *within that commitment*, and an address derives
+    ///      from the validator and the salt alone — not from the position, the generation, or the id. So a
+    ///      commitment naming only what a stopped run has left to deploy gives those contracts fresh positions
+    ///      and still lands them exactly where the first commitment intended. This is the gate's own answer to
+    ///      a run that cannot be continued: re-commit the remainder, to whoever is going to deploy it
+    function testRevalidatingTheRemainderFinishesAStoppedDeployment() public {
+        address other = makeAddr("standbyExecutor");
+
+        (bytes32[] memory salts, bytes[] memory initCodes) = _pairs(10);
+        _validate(salts, initCodes);
+
+        address[] memory intended = new address[](10);
+        for (uint256 i; i < 10; i++) {
+            intended[i] = deployGate.addressOf(VALIDATOR, salts[i]);
+        }
+
+        // Half the set is deployed, and then the executor becomes unreachable
+        for (uint256 i; i < 5; i++) {
+            vm.prank(EXECUTOR);
+            assertEq(deployGate.deploy(VALIDATOR, ID, salts[i], initCodes[i]), intended[i]);
+        }
+
+        // The remainder, committed on its own, to a different executor
+        bytes32[] memory left = new bytes32[](5);
+        bytes32[] memory leftHashes = new bytes32[](5);
+        bytes[] memory leftInitCodes = new bytes[](5);
+        for (uint256 i; i < 5; i++) {
+            left[i] = salts[i + 5];
+            leftInitCodes[i] = initCodes[i + 5];
+            leftHashes[i] = keccak256(leftInitCodes[i]);
+        }
+
+        vm.prank(VALIDATOR);
+        deployGate.validate(VALIDATOR, ID, left, leftHashes, _executors(other));
+
+        assertEq(deployGate.deployed(VALIDATOR, ID), 0, "the remainder starts from its own first position");
+
+        for (uint256 i; i < 5; i++) {
+            vm.prank(other);
+            address deployed = deployGate.deploy(VALIDATOR, ID, left[i], leftInitCodes[i]);
+
+            assertEq(deployed, intended[i + 5], "the address should not follow the position it was committed at");
+            assertEq(Target(deployed).value(), i + 6);
+        }
+
+        // What the interrupted run deployed is left alone throughout
+        for (uint256 i; i < 5; i++) {
+            assertEq(Target(intended[i]).value(), i + 1);
+        }
+    }
+
     /// @dev Reusing an id is what replaces a commitment, which is the whole of how one is corrected
     function testReusingAnIdReplacesTheCommitment() public {
         (bytes32[] memory salts, bytes[] memory initCodes) = _pairs(1);
