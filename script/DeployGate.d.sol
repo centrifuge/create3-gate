@@ -1,17 +1,22 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity >=0.5.0;
 
-/// @dev Zero throughout: no sender in the first 20 bytes, no redeploy protection in the 21st, which is the
-///      one combination CreateX turns into `keccak256(abi.encode(salt))` — neither the caller's nor the
-///      chain's. Nothing needs encoding here, since the CREATE2 address already covers the init code.
-bytes32 constant DEPLOY_GATE_SALT = bytes32(0);
+/// @dev Zero in every byte CreateX reads: no sender in the first 20, no redeploy protection in the 21st, which
+///      is the combination CreateX guards as `keccak256(abi.encode(salt))` — scoped to neither the caller nor
+///      the chain, so anyone can deploy the gate and every chain puts it at the same address.
+///
+///      The low 11 bytes are free, and mined: they are what makes the address both open and close on `aabb`,
+///      which is a marker that survives an explorer or a Safe truncating the middle. Mining owns those bytes
+///      and nothing above them, so the digits are the whole of what it buys.
+bytes32 constant DEPLOY_GATE_SALT = 0x000000000000000000000000000000000000000000000000000000001254a239;
 
 /// @dev `CREATE2(CreateX, keccak256(abi.encode(DEPLOY_GATE_SALT)), keccak256(type(DeployGate).creationCode))`.
 ///      CREATE2 rather than CREATE3 so the address covers the init code, which is what makes it safe for
 ///      anyone to deploy: the only contract that fits this address is the gate.
 ///
-///      Follows the gate's bytecode, so a change to DeployGate.sol or to its compiler settings moves it.
-address constant DEPLOY_GATE_ADDRESS = 0x65FF49a07F1CB06A1158F8FC22411FF49Dd23c86;
+///      Follows the gate's bytecode and the salt, so a change to DeployGate.sol, to its compiler settings, or
+///      to the mined salt moves it.
+address constant DEPLOY_GATE_ADDRESS = 0xAaBBc8292e0929619Ee73B8034E4ff916A5caabB;
 
 /// @dev The address covers the *init* code, and a constructor that read state could still return different
 ///      runtime code from it. The gate has no immutables and reads nothing, so this follows from it.

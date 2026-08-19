@@ -775,6 +775,25 @@ contract DeployGateBytecodeTest is Test, CreateXScript {
         assertEq(keccak256(type(DeployGate).runtimeCode), DEPLOY_GATE_EXTCODEHASH, "DEPLOY_GATE_EXTCODEHASH is stale");
     }
 
+    /// @dev Mining the salt is allowed to buy a vanity address and nothing else. Zero in the 21 bytes CreateX
+    ///      parses is what keeps the gate deployable by anyone, at one address, on every chain: a nonzero
+    ///      prefix would read as a permissioned deployer — leaving the account it names unable to reach this
+    ///      address — and 0x01 in the 21st byte would fold the chain id in. Mining owns the low 11 bytes and
+    ///      nothing above them, which is what this pins.
+    function testSaltIsPermissionlessAndChainAgnostic() public {
+        assertEq(uint256(DEPLOY_GATE_SALT) >> 88, 0, "the 21 bytes CreateX parses must stay zero");
+
+        // A stranger, on a chain this repository has never heard of, lands the gate where it belongs
+        vm.chainId(block.chainid + 1);
+        vm.prank(makeAddr("anyone"));
+
+        assertEq(
+            CreateX.deployCreate2(DEPLOY_GATE_SALT, DEPLOY_GATE_BYTECODE),
+            DEPLOY_GATE_ADDRESS,
+            "the salt should scope the gate to neither a caller nor a chain"
+        );
+    }
+
     /// @dev The address covers the *init* code, and the same init code can still return different runtime
     ///      code when a constructor reads state. This is what rules that out for the gate: no immutables and
     ///      nothing read, so the init code the address covers determines the runtime code as well

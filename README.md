@@ -125,14 +125,14 @@ contract — and exactly why the commitment has to bind the init code hash separ
 
 ### The gate's own address
 
-The gate is at `0x65FF49a07F1CB06A1158F8FC22411FF49Dd23c86` on every chain, and **anyone** can put it there. It
+The gate is at `0xAaBBc8292e0929619Ee73B8034E4ff916A5caabB` on every chain, and **anyone** can put it there. It
 takes no constructor arguments and grants its deployer nothing, so there is nothing to configure and no order
 to get right: the first run that needs a gate deploys it, the way a deployment makes sure CreateX is there.
 
 It is deployed through CreateX's `deployCreate2`, not `deployCreate3`, which is what makes that safe: a CREATE2
 address covers the init code, so the only contract that fits the gate's address is the gate — and this
-contract's code is the whole of its authority. The salt is zero throughout, the one combination CreateX derives
-from the salt alone, so the address is the same everywhere. It needs
+contract's code is the whole of its authority. The salt is zero in every byte CreateX reads, the one combination
+CreateX derives from the salt alone, so the address is the same everywhere. It needs
 [CreateX](https://github.com/pcaversaccio/createx) at `0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed` on the chain.
 
 The gate's code is, by the same derivation, effectively frozen: changing `DeployGate.sol`, or the settings it is
@@ -145,7 +145,7 @@ src/DeployGate.sol          the gate
 src/IDeployGate.sol         its interface, and where each call is documented in full
 script/DeployGate.d.sol     salt, address, extcodehash and creation code — what a consumer holds the gate by
 script/DeployGateScript.sol brings the gate up in a forge script or test, as CreateXScript does for CreateX
-test/DeployGate.t.sol       behaviour, plus the check that keeps DeployGate.d.sol honest
+test/DeployGate.t.sol       behaviour, plus the checks that keep DeployGate.d.sol honest
 ```
 
 The split between `src/` and `script/` mirrors [createx-forge](https://github.com/radeksvarz/createx-forge),
