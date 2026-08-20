@@ -18,6 +18,10 @@ interface IDeployGate {
     error LengthMismatch();
     error NotValidated(bytes32 salt);
     error DuplicateSalt(bytes32 salt);
+    /// @dev The salt is already spent: something stands at the address it names
+    error ProxyDeploymentFailed();
+    /// @dev The init code did not leave a contract behind, having reverted or returned nothing
+    error ContractDeploymentFailed();
 
     //----------------------------------------------------------------------------------------------
     // Validation
@@ -37,7 +41,7 @@ interface IDeployGate {
     /// @param  id Which of the validator's commitments this is. Any 32 bytes, chosen by the caller. It scopes
     ///         permission only: two commitments naming the same salt still point at the same address, and
     ///         whichever deploys first takes it
-    /// @param  salts Salt of each contract, in deployment order. Any 32 bytes: the CreateX salt is derived
+    /// @param  salts Salt of each contract, in deployment order. Any 32 bytes: the CREATE3 salt is derived
     /// @param  initCodeHashes Hash of the creation code, including constructor arguments, of each contract
     /// @param  executors Accounts allowed to deploy this commitment, and nothing else. None of them has to be
     ///         the validator, and none gains any privilege beyond deploying exactly what is committed here
@@ -86,12 +90,11 @@ interface IDeployGate {
     /// @notice What a salt carries once committed, which a caller reproduces to deploy it
     function commitment(bytes32 initCodeHash, uint256 index) external pure returns (bytes32);
 
-    /// @notice CreateX salt that `validator` deploys `salt` under. Names the gate as its guardian, which is
-    ///         what makes CreateX scope the address to it, and holds the 21st byte at zero, which is what
-    ///         keeps the chain id out of it. That leaves 11 bytes to tell the validators apart, which is what
-    ///         the addresses of two of them are separated by. The commitment id is not in it: where a
-    ///         contract lands does not depend on which commitment authorised it.
-    function createXSalt(address validator, bytes32 salt) external view returns (bytes32);
+    /// @notice CREATE3 salt that `validator` deploys `salt` under, which is the whole of what separates one
+    ///         namespace from the next: 32 bytes, none of them spent on anything else. Nothing chain-specific
+    ///         goes into it, so a namespace is the same set of addresses on every chain. The commitment id is
+    ///         not in it either: where a contract lands does not depend on which commitment authorised it.
+    function namespaceSalt(address validator, bytes32 salt) external pure returns (bytes32);
 
     /// @notice Address `salt` deploys to in `validator`'s namespace, whether or not it has been deployed yet
     function addressOf(address validator, bytes32 salt) external view returns (address);

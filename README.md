@@ -101,31 +101,31 @@ Three things all have to be committed for that to hold:
 
 ### Addresses
 
-CreateX derives a CREATE3 address from its caller and the salt. The caller is the gate, and the gate builds its
-own CreateX salt from whatever 32 bytes a script passes it:
+The gate performs CREATE3 itself: a CREATE2 proxy, deployed by the gate, whose only job is to `CREATE` the
+contract. The address therefore derives from the gate and from a salt of the gate's own making:
 
 ```
-createXSalt(validator, salt) = bytes20(gate) ‖ 0x00 ‖ bytes11(keccak256(validator, salt))
+namespaceSalt(validator, salt) = keccak256(validator, salt)
 ```
 
-Both halves of that are load-bearing:
+Three things follow from that:
 
-- The first 20 bytes name the gate as CreateX's **salt guardian**, which is what makes CreateX scope the
-  address to the gate. No address the gate hands out is reachable from outside it, whatever salt somebody
-  passes CreateX directly — and a script cannot ask for a salt naming a different guardian, which would put
-  the address somewhere anyone could take it.
-- The 21st byte is CreateX's cross-chain redeploy protection, which would fold the chain id into the address.
-  Held at zero, so **a namespace is the same set of addresses on every chain**.
+- **The deployer is the gate**, and CREATE2 scopes the proxy to whoever deploys it, so no address the gate
+  hands out is reachable from outside it. Handing the same salt to CreateX, or to any other deployer, lands
+  somewhere else.
+- **Nothing chain-specific enters the derivation**, so a namespace is the same set of addresses on every
+  chain.
+- **The salt is a whole 32 bytes.** Nothing is spent on a guardian or a redeploy flag, so what separates two
+  namespaces, and two salts within one, is the full width of a hash rather than a truncation of it.
 
-That leaves 11 bytes carrying `keccak256(validator, salt)`, which is what separates two namespaces — and two
-salts within one — from each other. `addressOf(validator, salt)` computes the result, deployed or not.
+`addressOf(validator, salt)` computes the result, deployed or not.
 
 CREATE3 addresses ignore the init code, which is what keeps an address still when a patch release changes a
 contract — and exactly why the commitment has to bind the init code hash separately.
 
 ### The gate's own address
 
-The gate is at `0x65FF49a07F1CB06A1158F8FC22411FF49Dd23c86` on every chain, and **anyone** can put it there. It
+The gate is at `0x1966131bC6a0B44e5dEF3E346a2FB0D1eC854671` on every chain, and **anyone** can put it there. It
 takes no constructor arguments and grants its deployer nothing, so there is nothing to configure and no order
 to get right: the first run that needs a gate deploys it, the way a deployment makes sure CreateX is there.
 
@@ -133,7 +133,9 @@ It is deployed through CreateX's `deployCreate2`, not `deployCreate3`, which is 
 address covers the init code, so the only contract that fits the gate's address is the gate — and this
 contract's code is the whole of its authority. The salt is zero throughout, the one combination CreateX derives
 from the salt alone, so the address is the same everywhere. It needs
-[CreateX](https://github.com/pcaversaccio/createx) at `0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed` on the chain.
+[CreateX](https://github.com/pcaversaccio/createx) at `0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed` on the chain
+for that one transaction, and for nothing after it: the deployments the gate goes on to make use its own
+CREATE3.
 
 The gate's code is, by the same derivation, effectively frozen: changing `DeployGate.sol`, or the settings it is
 compiled with, produces a different gate at a different address, and every address derived from it moves.
@@ -142,6 +144,7 @@ compiled with, produces a different gate at a different address, and every addre
 
 ```
 src/DeployGate.sol          the gate
+src/Create3.sol             the CREATE3 derivation it deploys through
 src/IDeployGate.sol         its interface, and where each call is documented in full
 script/DeployGate.d.sol     salt, address, extcodehash and creation code — what a consumer holds the gate by
 script/DeployGateScript.sol brings the gate up in a forge script or test, as CreateXScript does for CreateX
