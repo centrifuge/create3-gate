@@ -5,10 +5,10 @@ pragma solidity >=0.5.0;
 ///      is the combination CreateX guards as `keccak256(abi.encode(salt))` — scoped to neither the caller nor
 ///      the chain, so anyone can deploy the gate and every chain puts it at the same address.
 ///
-///      The low 11 bytes are free, and mined: they are what makes the address both open and close on `aabb`,
-///      which is a marker that survives an explorer or a Safe truncating the middle. Mining owns those bytes
-///      and nothing above them, so the digits are the whole of what it buys.
-bytes32 constant DEPLOY_GATE_SALT = 0x000000000000000000000000000000000000000000000000000000001254a239;
+///      The low 11 bytes are free, and mined: they are what opens the address `0x6A7E0000`, which is a marker
+///      that stays legible where an explorer or a Safe truncates the middle. Mining owns those bytes and
+///      nothing above them, so the digits are the whole of what it buys.
+bytes32 constant DEPLOY_GATE_SALT = 0x00000000000000000000000000000000000000000000000000000000bd7e597d;
 
 /// @dev `CREATE2(CreateX, keccak256(abi.encode(DEPLOY_GATE_SALT)), keccak256(type(DeployGate).creationCode))`.
 ///      CREATE2 rather than CREATE3 so the address covers the init code, which is what makes it safe for
@@ -16,7 +16,7 @@ bytes32 constant DEPLOY_GATE_SALT = 0x000000000000000000000000000000000000000000
 ///
 ///      Follows the gate's bytecode and the salt, so a change to DeployGate.sol, to its compiler settings, or
 ///      to the mined salt moves it.
-address constant DEPLOY_GATE_ADDRESS = 0xAaBBc8292e0929619Ee73B8034E4ff916A5caabB;
+address constant DEPLOY_GATE_ADDRESS = 0x6A7E0000Df5b2C00101da4700317128f07ad8BeA;
 
 /// @dev The address covers the *init* code, and a constructor that read state could still return different
 ///      runtime code from it. The gate has no immutables and reads nothing, so this follows from it.

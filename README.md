@@ -125,7 +125,7 @@ contract — and exactly why the commitment has to bind the init code hash separ
 
 ### The gate's own address
 
-The gate is at `0xAaBBc8292e0929619Ee73B8034E4ff916A5caabB` on every chain, and **anyone** can put it there. It
+The gate is at `0x6A7E0000Df5b2C00101da4700317128f07ad8BeA` on every chain, and **anyone** can put it there. It
 takes no constructor arguments and grants its deployer nothing, so there is nothing to configure and no order
 to get right: the first run that needs a gate deploys it, the way a deployment makes sure CreateX is there.
 
