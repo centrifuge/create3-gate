@@ -3,6 +3,7 @@ pragma solidity >=0.8.4;
 
 interface IDeployGate {
     event SetDelegate(address indexed validator, address indexed delegatee, bool isValid);
+    event RevokeAll(address indexed validator, uint256 term);
     event Deploy(address indexed validator, bytes32 indexed id, uint256 nonce, bytes32 salt, address indexed target);
     event Validate(
         address indexed validator,
@@ -30,7 +31,20 @@ interface IDeployGate {
     /// @notice Lets `delegatee` commit in the caller's namespace, or stops it. Always the caller's own: a
     ///         delegate cannot name further delegates, and cannot take the namespace from the account it is
     ///         named after, which is the one thing addresses derive from.
+    /// @dev    A delegate is trusted while it holds the delegation: what it commits is committed, and
+    ///         stopping it reaches only what it would commit next. A key found to have leaked is therefore
+    ///         two calls rather than one, since what it already committed — under ids the validator may
+    ///         never have seen — goes with `revokeAll`.
     function setDelegate(address delegatee, bool isValid) external;
+
+    /// @notice Ends the caller's current term, which makes everything committed in it undeployable at once,
+    ///         whatever id holds it and whoever committed it. The namespace reads as empty afterwards and
+    ///         commits again as it did, since a term bounds what a commitment grants and never an address:
+    ///         the salts stay unspent, so what was going to be deployed still can be.
+    /// @dev    This is what contains a leaked delegate key. Revoking the delegate stops it committing again;
+    ///         this reaches what it committed while it held the delegation, without the validator first
+    ///         having to find which ids that was.
+    function revokeAll() external;
 
     /// @notice Commits what each salt may deploy, in what order, and who may deploy it. Committing under an
     ///         id that already holds one replaces it whole, so whatever it does not mention becomes
@@ -58,6 +72,9 @@ interface IDeployGate {
     //----------------------------------------------------------------------------------------------
 
     /// @notice Deploys the next contract of a commitment, and consumes it.
+    /// @dev    The cursor moves before the init code runs, so what the order binds is the order the
+    ///         deployments were invoked in and not the order their constructors finished: a constructor
+    ///         reaching an executor can have the next contract of the same commitment deployed inside it.
     /// @param  validator Namespace the contract was committed in, which is what its address derives from
     /// @param  id Commitment the contract was committed under, which is what holds its position
     /// @param  salt Salt of the contract, as committed
@@ -81,11 +98,20 @@ interface IDeployGate {
     /// @notice Whether `who` may commit in `validator`'s namespace on its behalf
     function isDelegate(address validator, address who) external view returns (bool);
 
+    /// @notice Which term of `validator`'s namespace is current. Everything a commitment grants is keyed by
+    ///         it, so `revokeAll` moving it is what leaves the earlier ones holding nothing
+    function term(address validator) external view returns (uint256);
+
     /// @notice Whether `who` may deploy what a commitment holds, under its live generation
     function isExecutor(address validator, bytes32 id, address who) external view returns (bool);
 
     /// @notice What `salt` carries under a commitment's live generation, or zero when it carries nothing
     function validated(address validator, bytes32 id, bytes32 salt) external view returns (bytes32);
+
+    /// @notice What a commitment's grants hang off: the namespace, the term it was made in, and the id. The
+    ///         term is in it so that ending one leaves every commitment made under it holding nothing,
+    ///         without the gate having to walk ids it was never told about
+    function scopeOf(address validator, bytes32 id) external view returns (bytes32);
 
     /// @notice What a salt carries once committed, which a caller reproduces to deploy it
     function commitment(bytes32 initCodeHash, uint256 index) external pure returns (bytes32);

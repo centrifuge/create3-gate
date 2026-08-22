@@ -79,6 +79,10 @@ delegate naming a delegate names it in its own, and nothing a delegate does can 
 the account it is named after. A leaked delegate key can commit, and is revoked in one call; it can never be
 walked outwards, and it can never lock the validator out.
 
+A delegate is trusted for as long as it holds the delegation: what it commits is committed, and `setDelegate`
+withdrawing the delegation reaches only what it would commit next. Containing a key found to have leaked is
+therefore two calls rather than one, the second being `revokeAll()`.
+
 Revoking an **executor** key works the other way round, because executors belong to the commitment rather than
 sitting beside it: commit again without it, which replaces the set whole.
 
@@ -98,6 +102,26 @@ Three things all have to be committed for that to hold:
   into its runtime code. A commitment binds each contract to its position — `commitment(initCodeHash, index)`
   — and the gate keeps a cursor per commitment, so a contract deployed out of turn reverts rather than landing
   early.
+
+### Revoking everything at once
+
+Replacing a commitment revokes what it held, but that is per id, and a delegate picks its own ids: after a
+leaked delegate key, the ids to replace are not all ids the validator knows. `revokeAll()` is the call that
+does not need to know them.
+
+Every commitment hangs off the **term** its namespace was in when it was made. `revokeAll()` ends that term, so
+everything committed in it — under any id, by the validator or by any delegate — stops being deployable in one
+write, and the namespace reads as empty afterwards. Nothing has to be enumerated first, and nothing is
+recovered by finding it later.
+
+A term bounds what a commitment grants and never an address:
+
+- **The salts stay unspent.** Killing a commitment that was going to deploy at an address leaves that address
+  free, so what the validator meant to put there still can be.
+- **Committing again works as it did**, in the term the revocation opened. The generation of an id keeps
+  counting across it, so no two commitments under one id are ever the same generation in the log.
+- **It is the caller's own namespace**, like `setDelegate`: a delegate calling `revokeAll` ends its own term
+  and reaches nothing of the validator's.
 
 ### Addresses
 
@@ -125,7 +149,7 @@ contract — and exactly why the commitment has to bind the init code hash separ
 
 ### The gate's own address
 
-The gate is at `0x1966131bC6a0B44e5dEF3E346a2FB0D1eC854671` on every chain, and **anyone** can put it there. It
+The gate is at `0x49196C553Ba258A745F8d699E3a07ecA5a498Af3` on every chain, and **anyone** can put it there. It
 takes no constructor arguments and grants its deployer nothing, so there is nothing to configure and no order
 to get right: the first run that needs a gate deploys it, the way a deployment makes sure CreateX is there.
 
