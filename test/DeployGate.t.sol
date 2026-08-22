@@ -161,6 +161,104 @@ contract DeployGateTest is Test, CreateXScript {
         deployGate.validate(VALIDATOR, ID, new bytes32[](0), new bytes32[](0), new address[](0));
     }
 
+    /// @dev What revoking a delegate does not reach is what it already committed, under ids the validator may
+    ///      never have seen. `revokeAll` is that half: one call, and everything the namespace holds stops
+    ///      being deployable, whoever committed it and wherever they put it
+    function testRevokeAllInvalidatesEveryCommitment() public {
+        (bytes32[] memory salts, bytes[] memory initCodes) = _pairs(1);
+
+        vm.prank(VALIDATOR);
+        deployGate.setDelegate(DELEGATE, true);
+
+        vm.prank(DELEGATE);
+        deployGate.validate(VALIDATOR, OTHER_ID, salts, _hashes(initCodes), _executors(EXECUTOR));
+        _validate(salts, initCodes);
+
+        vm.startPrank(VALIDATOR);
+        deployGate.setDelegate(DELEGATE, false);
+        deployGate.revokeAll();
+        vm.stopPrank();
+
+        assertEq(deployGate.term(VALIDATOR), 1, "a further term");
+
+        // The namespace reads as empty, both what the delegate committed and what the validator did
+        assertEq(deployGate.validated(VALIDATOR, ID, salts[0]), 0, "the validator's commitment holds nothing");
+        assertEq(deployGate.validated(VALIDATOR, OTHER_ID, salts[0]), 0, "nor does the delegate's");
+        assertFalse(deployGate.isExecutor(VALIDATOR, ID, EXECUTOR), "and nobody may deploy either");
+        assertFalse(deployGate.isExecutor(VALIDATOR, OTHER_ID, EXECUTOR));
+
+        vm.startPrank(EXECUTOR);
+        vm.expectRevert(IDeployGate.NotExecutor.selector);
+        deployGate.deploy(VALIDATOR, ID, salts[0], initCodes[0]);
+
+        vm.expectRevert(IDeployGate.NotExecutor.selector);
+        deployGate.deploy(VALIDATOR, OTHER_ID, salts[0], initCodes[0]);
+        vm.stopPrank();
+    }
+
+    /// @dev A term bounds what a commitment grants and never an address: the salts it held are still unspent,
+    ///      so what the validator meant to put there is still its to put
+    function testRevokeAllLeavesTheAddressesUnspent() public {
+        (bytes32[] memory salts, bytes[] memory initCodes) = _pairs(1);
+
+        vm.prank(VALIDATOR);
+        deployGate.setDelegate(DELEGATE, true);
+
+        bytes memory theirs = _initCode(42);
+        bytes32[] memory hashes = new bytes32[](1);
+        hashes[0] = keccak256(theirs);
+
+        vm.prank(DELEGATE);
+        deployGate.validate(VALIDATOR, OTHER_ID, salts, hashes, _executors(EXECUTOR));
+
+        vm.prank(VALIDATOR);
+        deployGate.revokeAll();
+
+        // Same salt, same address, and it is the validator's commitment that lands there
+        _validate(salts, initCodes);
+        assertEq(_deploy(salts, initCodes)[0], deployGate.addressOf(VALIDATOR, salts[0]));
+        assertEq(Target(deployGate.addressOf(VALIDATOR, salts[0])).value(), 1);
+    }
+
+    /// @dev The generation keeps counting across a revocation, so no two commitments under one id are ever
+    ///      logged as the same one
+    function testCommittingAgainAfterRevokeAll() public {
+        (bytes32[] memory salts, bytes[] memory initCodes) = _pairs(1);
+        _validate(salts, initCodes);
+
+        vm.prank(VALIDATOR);
+        deployGate.revokeAll();
+
+        _validate(salts, initCodes);
+        assertEq(deployGate.nonce(VALIDATOR, ID), 2, "the second generation of that id");
+        assertEq(Target(_deploy(salts, initCodes)[0]).value(), 1);
+    }
+
+    /// @dev Always the caller's own namespace, like `setDelegate`: a delegate calling it ends its own term and
+    ///      reaches nothing of the validator's, so a leaked key cannot revoke the deployment it was helping
+    function testRevokeAllIsPerNamespace() public {
+        (bytes32[] memory salts, bytes[] memory initCodes) = _pairs(1);
+        _validate(salts, initCodes);
+
+        vm.prank(VALIDATOR);
+        deployGate.setDelegate(DELEGATE, true);
+
+        vm.prank(DELEGATE);
+        deployGate.revokeAll();
+
+        assertEq(deployGate.term(DELEGATE), 1, "the delegate ended its own term");
+        assertEq(deployGate.term(VALIDATOR), 0, "and none of the validator's");
+        assertEq(Target(_deploy(salts, initCodes)[0]).value(), 1, "the commitment still deploys");
+    }
+
+    function testRevokeAllEmitsEvent() public {
+        vm.expectEmit();
+        emit IDeployGate.RevokeAll(VALIDATOR, 1);
+
+        vm.prank(VALIDATOR);
+        deployGate.revokeAll();
+    }
+
     /// @dev `setDelegate` always writes to the caller's own namespace, so a delegate naming one names it in
     ///      its own: delegation is one level deep, and cannot be walked outwards from a single leaked key
     function testDelegateCannotNameFurtherDelegates() public {

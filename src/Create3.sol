@@ -32,7 +32,7 @@ library Create3 {
         address proxy =
             address(uint160(uint256(keccak256(abi.encodePacked(hex"ff", deployer, salt, PROXY_INIT_CODE_HASH)))));
 
-        // 0xd6 = RLP list of 21 bytes, 0x94 = RLP string of 20 bytes, 0x01 = the proxy's first nonce
+        // 0xd6 = RLP list of a 22-byte payload, 0x94 = RLP string of 20 bytes, 0x01 = the proxy's first nonce
         target = address(uint160(uint256(keccak256(abi.encodePacked(hex"d694", proxy, hex"01")))));
     }
 }

@@ -18,14 +18,12 @@ import {IDeployGate} from "./IDeployGate.sol";
 ///         and not through CREATE3, where it does not: a CREATE3 gate address would be code anyone could
 ///         choose, and this contract's code is the whole of its authority.
 contract DeployGate is IDeployGate {
+    mapping(address validator => uint256) public term;
     mapping(address validator => mapping(bytes32 id => uint256)) public nonce;
     mapping(address validator => mapping(bytes32 id => uint256)) public deployed;
     mapping(address validator => mapping(address who => bool)) public isDelegate;
-    mapping(address validator => mapping(bytes32 id => mapping(uint256 nonce => mapping(address who => bool)))) internal
-        _executor;
-    mapping(
-        address validator => mapping(bytes32 id => mapping(uint256 nonce => mapping(bytes32 salt => bytes32 hash)))
-    ) internal _validated;
+    mapping(bytes32 scope => mapping(uint256 nonce => mapping(address who => bool))) internal _executor;
+    mapping(bytes32 scope => mapping(uint256 nonce => mapping(bytes32 salt => bytes32 hash))) internal _validated;
 
     //----------------------------------------------------------------------------------------------
     // Validation
@@ -42,19 +40,20 @@ contract DeployGate is IDeployGate {
         require(msg.sender == validator || isDelegate[validator][msg.sender], NotValidator());
         require(salts.length == initCodeHashes.length, LengthMismatch());
 
+        bytes32 scope = scopeOf(validator, id);
         uint256 current = ++nonce[validator][id];
         deployed[validator][id] = 0;
 
         for (uint256 i; i < executors.length; i++) {
-            _executor[validator][id][current][executors[i]] = true;
+            _executor[scope][current][executors[i]] = true;
         }
 
         for (uint256 i; i < salts.length; i++) {
             // A repeat would leave one entry behind two positions in the log, so what it says would stop
             // being what is enforceable, and only one of the two would be reachable
-            require(_validated[validator][id][current][salts[i]] == 0, DuplicateSalt(salts[i]));
+            require(_validated[scope][current][salts[i]] == 0, DuplicateSalt(salts[i]));
 
-            _validated[validator][id][current][salts[i]] = commitment(initCodeHashes[i], i);
+            _validated[scope][current][salts[i]] = commitment(initCodeHashes[i], i);
         }
 
         // One event for the whole commitment, so that it can be read back from a single log. It carries the
@@ -69,6 +68,15 @@ contract DeployGate is IDeployGate {
         emit SetDelegate(msg.sender, delegatee, isValid);
     }
 
+    /// @inheritdoc IDeployGate
+    function revokeAll() external {
+        // Everything a commitment grants hangs off the term it was made in, so ending the term is the whole
+        // of it: one write, whatever the gate holds and whoever put it there, and nothing to enumerate first
+        uint256 current = ++term[msg.sender];
+
+        emit RevokeAll(msg.sender, current);
+    }
+
     //----------------------------------------------------------------------------------------------
     // Deployment
     //----------------------------------------------------------------------------------------------
@@ -78,13 +86,14 @@ contract DeployGate is IDeployGate {
         external
         returns (address target)
     {
+        bytes32 scope = scopeOf(validator, id);
         uint256 current = nonce[validator][id];
-        require(_executor[validator][id][current][msg.sender], NotExecutor());
+        require(_executor[scope][current][msg.sender], NotExecutor());
 
         bytes32 expected = commitment(keccak256(initCode), deployed[validator][id]);
-        require(_validated[validator][id][current][salt] == expected, NotValidated(salt));
+        require(_validated[scope][current][salt] == expected, NotValidated(salt));
 
-        delete _validated[validator][id][current][salt];
+        delete _validated[scope][current][salt];
         ++deployed[validator][id];
 
         target = Create3.deploy(namespaceSalt(validator, salt), initCode);
@@ -97,12 +106,17 @@ contract DeployGate is IDeployGate {
 
     /// @inheritdoc IDeployGate
     function isExecutor(address validator, bytes32 id, address who) external view returns (bool) {
-        return _executor[validator][id][nonce[validator][id]][who];
+        return _executor[scopeOf(validator, id)][nonce[validator][id]][who];
     }
 
     /// @inheritdoc IDeployGate
     function validated(address validator, bytes32 id, bytes32 salt) external view returns (bytes32) {
-        return _validated[validator][id][nonce[validator][id]][salt];
+        return _validated[scopeOf(validator, id)][nonce[validator][id]][salt];
+    }
+
+    /// @inheritdoc IDeployGate
+    function scopeOf(address validator, bytes32 id) public view returns (bytes32) {
+        return keccak256(abi.encode(validator, term[validator], id));
     }
 
     /// @inheritdoc IDeployGate
