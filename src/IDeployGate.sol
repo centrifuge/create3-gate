@@ -34,7 +34,8 @@ interface IDeployGate {
     /// @dev    A delegate is trusted while it holds the delegation: what it commits is committed, and
     ///         stopping it reaches only what it would commit next. A key found to have leaked is therefore
     ///         two calls rather than one, since what it already committed — under ids the validator may
-    ///         never have seen — goes with `revokeAll`.
+    ///         never have seen — goes with `revokeAll`. This one comes first: `revokeAll` opens a term, and
+    ///         an account still holding the delegation commits in it as it did in the last.
     function setDelegate(address delegatee, bool isValid) external;
 
     /// @notice Ends the caller's current term, which makes everything committed in it undeployable at once,
@@ -43,7 +44,9 @@ interface IDeployGate {
     ///         the salts stay unspent, so what was going to be deployed still can be.
     /// @dev    This is what contains a leaked delegate key. Revoking the delegate stops it committing again;
     ///         this reaches what it committed while it held the delegation, without the validator first
-    ///         having to find which ids that was.
+    ///         having to find which ids that was. Do the revocations first, in the same transaction where
+    ///         one is available: this ends a term and opens the next, and a delegate still holding the
+    ///         delegation can commit in the new one, which would put back what this call took away.
     function revokeAll() external;
 
     /// @notice Commits what each salt may deploy, in what order, and who may deploy it. Committing under an

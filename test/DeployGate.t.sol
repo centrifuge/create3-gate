@@ -251,6 +251,42 @@ contract DeployGateTest is Test, CreateXScript {
         assertEq(Target(_deploy(salts, initCodes)[0]).value(), 1, "the commitment still deploys");
     }
 
+    /// @dev A term bounds commitments and not permission to make them: a delegate keeps its delegation
+    ///      across a revocation, and commits into the term the revocation opened. Containing a leaked key is
+    ///      therefore `setDelegate` first and `revokeAll` second, and the docs say so
+    function testRevokeAllDoesNotWithdrawTheDelegation() public {
+        (bytes32[] memory salts, bytes[] memory initCodes) = _pairs(1);
+
+        vm.prank(VALIDATOR);
+        deployGate.setDelegate(DELEGATE, true);
+
+        vm.prank(DELEGATE);
+        deployGate.validate(VALIDATOR, OTHER_ID, salts, _hashes(initCodes), _executors(EXECUTOR));
+
+        vm.prank(VALIDATOR);
+        deployGate.revokeAll();
+
+        // The wrong order: what the delegate committed is gone, but the delegate is not, so it puts the same
+        // executor back in the new term
+        assertTrue(deployGate.isDelegate(VALIDATOR, DELEGATE), "still a delegate");
+
+        vm.prank(DELEGATE);
+        deployGate.validate(VALIDATOR, OTHER_ID, salts, _hashes(initCodes), _executors(EXECUTOR));
+        assertTrue(deployGate.isExecutor(VALIDATOR, OTHER_ID, EXECUTOR), "and deploys as it did before");
+
+        // The other order is what contains it
+        vm.startPrank(VALIDATOR);
+        deployGate.setDelegate(DELEGATE, false);
+        deployGate.revokeAll();
+        vm.stopPrank();
+
+        assertFalse(deployGate.isExecutor(VALIDATOR, OTHER_ID, EXECUTOR), "nothing left to deploy");
+
+        vm.prank(DELEGATE);
+        vm.expectRevert(IDeployGate.NotValidator.selector);
+        deployGate.validate(VALIDATOR, OTHER_ID, salts, _hashes(initCodes), _executors(EXECUTOR));
+    }
+
     function testRevokeAllEmitsEvent() public {
         vm.expectEmit();
         emit IDeployGate.RevokeAll(VALIDATOR, 1);

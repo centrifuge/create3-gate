@@ -81,7 +81,10 @@ walked outwards, and it can never lock the validator out.
 
 A delegate is trusted for as long as it holds the delegation: what it commits is committed, and `setDelegate`
 withdrawing the delegation reaches only what it would commit next. Containing a key found to have leaked is
-therefore two calls rather than one, the second being `revokeAll()`.
+therefore two calls rather than one, the second being `revokeAll()` — and in that order. `revokeAll()` ends the
+term the leaked key committed in and opens the next; an account still holding the delegation commits in the new
+term as it did in the old, and would put back what the revocation took away. Withdraw every delegation that is
+in doubt first, in one transaction with the `revokeAll()` where the validator can batch them.
 
 Revoking an **executor** key works the other way round, because executors belong to the commitment rather than
 sitting beside it: commit again without it, which replaces the set whole.
@@ -122,6 +125,10 @@ A term bounds what a commitment grants and never an address:
   counting across it, so no two commitments under one id are ever the same generation in the log.
 - **It is the caller's own namespace**, like `setDelegate`: a delegate calling `revokeAll` ends its own term
   and reaches nothing of the validator's.
+
+What it does not do is take anyone's permission to commit: a delegate keeps its delegation across a term, and
+an executor named again in the new term is an executor again. Withdrawing the delegations that are in doubt
+comes first, or the account being contained commits into the term the revocation just opened.
 
 ### Addresses
 
