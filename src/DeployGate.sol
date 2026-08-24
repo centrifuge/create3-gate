@@ -18,14 +18,17 @@ import {IDeployGate} from "./IDeployGate.sol";
 ///         and not through CREATE3, where it does not: a CREATE3 gate address would be code anyone could
 ///         choose, and this contract's code is the whole of its authority.
 contract DeployGate is IDeployGate {
+    // Namespaces
     mapping(address namespace => uint256) public term;
     mapping(address namespace => uint256) public delay;
+    mapping(address namespace => mapping(uint256 term => mapping(address who => bool))) internal _isDelegate;
+
+    // Commitments
     mapping(address namespace => mapping(bytes32 id => uint256)) public nonce;
     mapping(address namespace => mapping(bytes32 id => uint256)) public deployed;
-    mapping(address namespace => mapping(uint256 term => mapping(address who => bool))) internal _isDelegate;
+    mapping(bytes32 scope => mapping(uint256 nonce => uint256)) internal _deployableAt;
     mapping(bytes32 scope => mapping(uint256 nonce => mapping(address who => bool))) internal _executor;
     mapping(bytes32 scope => mapping(uint256 nonce => mapping(bytes32 salt => bytes32 hash))) internal _committed;
-    mapping(bytes32 scope => mapping(uint256 nonce => uint256)) internal _deployableAt;
 
     //----------------------------------------------------------------------------------------------
     // Committing
