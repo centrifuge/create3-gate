@@ -1,7 +1,7 @@
 # create3-gate
 
-A chain-agnostic, ownerless gate that splits CREATE3 deployment into a validator who commits what should be
-deployed and executors who can deploy only that.
+A chain-agnostic, ownerless gate that splits CREATE3 deployment into a namespace that commits what should be
+deployed and executors that can deploy only that.
 
 ## What it is for
 
@@ -22,20 +22,20 @@ The `DeployGate` splits that in two.
 
 | Phase | Who signs | What it does | Transactions |
 |---|---|---|---|
-| Validate | the **validator**, or one of its **delegates** | commits the `(salt, init code hash)` of every contract, in order, and names who may deploy them | **1 per chain**, whatever the contract count |
+| Commit | the **namespace**, or one of its **delegates** | commits the `(salt, init code hash)` of every contract, in order, and names who may deploy them | **1 per chain**, whatever the contract count |
 | Deploy | any **executor** the commitment named | deploys the committed contracts, one at a time, and nothing else | one per contract |
 
 What comes out of that:
 
 - **The deployment is agreed to before it exists.** One transaction a multisig can sign, one log a reviewer can
   read back, and nothing deployed until the phase after it — so a commitment found to be wrong costs a
-  re-validation rather than a redeployment.
+  re-commitment rather than a redeployment.
 - **The trusted account signs once per chain**, whatever the contract count: eleven signatures rather than 616,
   with an executor key that can only produce what was committed sending the rest. That is what makes a hardware
-  wallet or a Safe a realistic validator.
+  wallet or a Safe a realistic namespace key.
 - **The two phases have to agree.** The deploy phase rebuilds each init code from scratch and has to land on
   exactly what was committed, so anything phase-dependent in a constructor argument (`msg.sender` is the
-  classic) aborts with `NotValidated` rather than deploying something else.
+  classic) aborts with `NotCommitted` rather than deploying something else.
 - **Addresses are the same on every chain**, enforced by the gate rather than by the script, so the eleven
   commitments are one thing to review rather than eleven.
 
@@ -43,22 +43,22 @@ What comes out of that:
 
 ### Namespaces
 
-Everything inside the gate lives in a **namespace**, named after an account — the **validator**. Addresses
-derive from the gate, the namespace and the salt, so two namespaces can neither collide nor block each other,
-and one gate is safe for everyone to share. The gate itself has no roles: no owner, no admin, no wards, and no
+Everything inside the gate lives in a **namespace**, which is named after the account that commits in it.
+Addresses derive from the gate, the namespace and the salt, so two namespaces can neither collide nor block
+each other, and one gate is safe for everyone to share. The gate itself has no roles: no owner, no admin, no wards, and no
 privilege over anything it deploys.
 
-There is no call that moves a namespace to another account. The validator is what every address derives from,
-so it deliberately cannot be replaced — that key is the one that has to be looked after.
+There is no call that moves a namespace to another account. The account it is named after is what every
+address derives from, so it deliberately cannot be replaced — that key is the one that has to be looked after.
 
 ### Commitments
 
 ```solidity
-gate.validate(validator, id, salts, initCodeHashes, executors);   // the validator, or a delegate
-gate.deploy(validator, id, salts[0], initCodes[0]);               // any of the executors
+gate.commit(namespace, id, salts, initCodeHashes, executors);   // the namespace, or a delegate
+gate.deploy(namespace, id, salts[0], initCodes[0]);             // any of the executors
 ```
 
-A validator can hold several commitments at once, told apart by an **id** it picks:
+A namespace can hold several commitments at once, told apart by an **id** it picks:
 
 - Committing under an id that already holds a commitment **replaces it whole** — salts and executors alike.
   Committing nothing revokes it outright. Whatever a new commitment does not mention becomes undeployable, so
@@ -71,21 +71,19 @@ A validator can hold several commitments at once, told apart by an **id** it pic
 
 ### Delegates
 
-`setDelegate(delegatee, isValid)` lets another account run the validate phase on the validator's behalf. This
-is how a cold validator can be the thing addresses derive from while a warmer key signs the commitment.
+`setDelegate(delegatee, isValid)` lets another account run the commit phase on the namespace's behalf. This is
+how a cold key can be the thing every address derives from while a warmer one signs the commitment.
 
 Delegation goes one way and one level deep: `setDelegate` always writes to the *caller's own* namespace, so a
 delegate naming a delegate names it in its own, and nothing a delegate does can take the namespace away from
 the account it is named after. A leaked delegate key can commit, and is revoked in one call; it can never be
-walked outwards, and it can never lock the validator out.
+walked outwards, and it can never lock the namespace out.
 
 A delegate is trusted for as long as it holds the delegation: what it commits is committed, and `setDelegate`
-withdrawing the delegation reaches only what it would commit next. That is why a delegation is granted with a
-delay — see below — and why containing a key found to have leaked is two calls rather than one, the second
-being `revokeAll()`, in that order. `revokeAll()` ends the term the leaked key committed in and opens the next;
-an account still holding the delegation commits in the new term as it did in the old, and would put back what
-the revocation took away. Withdraw every delegation that is in doubt first, in one transaction with the
-`revokeAll()` where the validator can batch them.
+withdrawing one delegation reaches only what that delegate would commit next, leaving its standing commitments
+deployable — which is how a warm key is stood down once the phase it was granted for is over. That is why a
+delegation is granted with a delay, and why containing a key found to have leaked is `clear()`: one call, which
+withdraws every delegation along with everything any of them committed. Both are below.
 
 Revoking an **executor** key works the other way round, because executors belong to the commitment rather than
 sitting beside it: commit again without it, which replaces the set whole.
@@ -96,11 +94,11 @@ A delegate holds the warm key, and a warm key is the one that gets taken. What i
 `setDelay(seconds)`:
 
 ```solidity
-gate.setDelay(6 hours);           // the validator, for its own namespace
+gate.setDelay(6 hours);           // the namespace, for the delegates it grants
 ```
 
-A commitment made by a delegate is not deployable until the delay has passed. A commitment the validator makes
-itself never waits — the delay bounds the privilege the namespace hands out, not the one it holds — and
+A commitment made by a delegate is not deployable until the delay has passed. A commitment the namespace makes
+itself never waits — the delay bounds the privilege it hands out, not the one it holds — and
 `setDelay` writes to the caller's own namespace like everything else, so a delegate cannot shorten the window
 it is committing under.
 
@@ -109,14 +107,14 @@ choosing, in a single transaction that commits and deploys together. That matter
 elsewhere, because the addresses this gate reserves are the same on every chain: a salt spent on one chain and
 unspent on the other ten is the normal state of a deployment in progress, and anyone holding the delegate key
 can put its own code at those ten addresses the moment it sees the first one. There is no window to react in,
-which is what the delay creates and `revokeAll()` then uses.
+which is what the delay creates and `clear()` then uses.
 
 Two things follow from the delay being carried by the commitment rather than read at deploy time:
 
 - **Changing it reaches what comes after it**, never what already stands. Lowering the delay does not release
   a commitment that is waiting, and raising it does not hold back one that is not.
-- **The window is only as useful as the response inside it.** Pick the delay against how long the validator
-  takes to sign a `revokeAll()`, and against a monitor that is actually watching `Validate` events — the log
+- **The window is only as useful as the response inside it.** Pick the delay against how long the namespace
+  takes to sign a `clear()`, and against a monitor that is actually watching `Commit` events — the log
   carries the moment each commitment becomes deployable, so there is nothing to recompute. A namespace with no
   delegates needs no delay, and that is the default.
 
@@ -128,39 +126,38 @@ address, or revert. Authorizing several therefore costs no more trust than autho
 
 Three things all have to be committed for that to hold:
 
-- **The init code**, or an executor could deploy code of its own at a validated address.
-- **The salt**, or an executor could deploy validated code at an address of its choosing, consume the
-  validation, and strand the intended address.
+- **The init code**, or an executor could deploy code of its own at a committed address.
+- **The salt**, or an executor could deploy committed code at an address of its choosing, consume the
+  commitment, and strand the intended address.
 - **The order**, which is the one thing left for it to choose, and it is not inert: a constructor reading a
   dependency the deployment itself wires would see a different value depending on when it ran, and bake it
   into its runtime code. A commitment binds each contract to its position — `commitment(initCodeHash, index)`
   — and the gate keeps a cursor per commitment, so a contract deployed out of turn reverts rather than landing
   early.
 
-### Revoking everything at once
+### Emptying a namespace
 
 Replacing a commitment revokes what it held, but that is per id, and a delegate picks its own ids: after a
-leaked delegate key, the ids to replace are not all ids the validator knows. `revokeAll()` is the call that
-does not need to know them, and it is what the delay leaves room for: a delay with nothing to do in the window
-is a delay for nothing, and a revocation with no window is one racing a transaction that has already happened.
+leaked delegate key, the ids to replace are not all ids the namespace knows. `clear()` is the call that does
+not need to know them, and it is what the delay leaves room for: a delay with nothing to do in the window is a
+delay for nothing, and a revocation with no window is one racing a transaction that has already happened.
 
-Every commitment hangs off the **term** its namespace was in when it was made. `revokeAll()` ends that term, so
-everything committed in it — under any id, by the validator or by any delegate — stops being deployable in one
-write, and the namespace reads as empty afterwards. Nothing has to be enumerated first, and nothing is
-recovered by finding it later.
+Everything a namespace holds hangs off the **term** it was in at the time — its delegations as much as its
+commitments. `clear()` ends that term, so every commitment made in it under any id, by the namespace or by any
+delegate, along with every delegation it granted, stops counting in one write. Nothing has to be enumerated
+first, and nothing is recovered by finding it later: the namespace reads as empty afterwards, which is what the
+call is named after.
 
 A term bounds what a commitment grants and never an address:
 
 - **The salts stay unspent.** Killing a commitment that was going to deploy at an address leaves that address
-  free, so what the validator meant to put there still can be.
+  free, so what the namespace meant to put there still can be.
 - **Committing again works as it did**, in the term the revocation opened. The generation of an id keeps
   counting across it, so no two commitments under one id are ever the same generation in the log.
-- **It is the caller's own namespace**, like `setDelegate`: a delegate calling `revokeAll` ends its own term
-  and reaches nothing of the validator's.
-
-What it does not do is take anyone's permission to commit: a delegate keeps its delegation across a term, and
-an executor named again in the new term is an executor again. Withdrawing the delegations that are in doubt
-comes first, or the account being contained commits into the term the revocation just opened.
+- **It is the caller's own namespace**, like `setDelegate` and `setDelay`: a delegate calling `clear` empties
+  its own and reaches nothing of the namespace it commits in.
+- **Granting again works too.** A delegation made after the clearance lands in the term it opened, so resuming
+  is one call and never a revival of what was cleared.
 
 ### Addresses
 
@@ -168,7 +165,7 @@ The gate performs CREATE3 itself: a CREATE2 proxy, deployed by the gate, whose o
 contract. The address therefore derives from the gate and from a salt of the gate's own making:
 
 ```
-namespaceSalt(validator, salt) = keccak256(validator, salt)
+namespaceSalt(namespace, salt) = keccak256(namespace, salt)
 ```
 
 Three things follow from that:
@@ -181,7 +178,7 @@ Three things follow from that:
 - **The salt is a whole 32 bytes.** Nothing is spent on a guardian or a redeploy flag, so what separates two
   namespaces, and two salts within one, is the full width of a hash rather than a truncation of it.
 
-`addressOf(validator, salt)` computes the result, deployed or not.
+`addressOf(namespace, salt)` computes the result, deployed or not.
 
 CREATE3 addresses ignore the init code, which is what keeps an address still when a patch release changes a
 contract — and exactly why the commitment has to bind the init code hash separately.
@@ -232,11 +229,11 @@ import {IDeployGate} from "create3-gate/src/IDeployGate.sol";
 contract MyDeployer is DeployGateScript {
     IDeployGate gate = IDeployGate(DEPLOY_GATE_ADDRESS);
 
-    function validate() public {
+    function commit() public {
         vm.startBroadcast();
 
         setUpDeployGate();
-        gate.validate(validator, id, salts, initCodeHashes, executors);
+        gate.commit(namespace, id, salts, initCodeHashes, executors);
 
         vm.stopBroadcast();
     }
@@ -246,7 +243,7 @@ contract MyDeployer is DeployGateScript {
         setUpDeployGate();
 
         for (uint256 i; i < salts.length; i++) {
-            gate.deploy(validator, id, salts[i], initCodes[i]);
+            gate.deploy(namespace, id, salts[i], initCodes[i]);
         }
 
         vm.stopBroadcast();
