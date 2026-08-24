@@ -3,17 +3,17 @@ pragma solidity >=0.8.4;
 
 interface IDeployGate {
     event SetDelegate(address indexed namespace, address indexed delegatee, bool isValid);
-    event SetDelay(address indexed namespace, uint256 seconds_);
+    event SetDelay(address indexed namespace, uint64 seconds_);
     event Clear(address indexed namespace, uint256 term);
     event Deploy(
-        address indexed namespace, bytes32 indexed id, uint256 term, uint256 nonce, bytes32 salt, address indexed target
+        address indexed namespace, bytes32 indexed id, uint64 term, uint64 nonce, bytes32 salt, address indexed target
     );
     event Commit(
         address indexed namespace,
         bytes32 indexed id,
-        uint256 indexed nonce,
-        uint256 term,
-        uint256 deployableAt,
+        uint64 indexed nonce,
+        uint64 term,
+        uint64 deployableAt,
         bytes32[] salts,
         bytes32[] initCodeHashes,
         address[] executors
@@ -25,7 +25,7 @@ interface IDeployGate {
     error NotCommitted(bytes32 salt);
     error DuplicateSalt(bytes32 salt);
     /// @dev The delay a delegate's commitment was made under has not passed yet
-    error NotYetDeployable(uint256 deployableAt);
+    error NotYetDeployable(uint64 deployableAt);
     /// @dev The salt is already spent: something stands at the address it names
     error ProxyDeploymentFailed();
     /// @dev The init code did not leave a contract behind, having reverted or returned nothing
@@ -62,7 +62,7 @@ interface IDeployGate {
     ///         Pick it against how long the namespace takes to sign a `clear`, since that is what the window
     ///         is for: a delay shorter than its own response time buys nothing, and one that assumes nobody
     ///         is watching for `Commit` events buys nothing either.
-    function setDelay(uint256 seconds_) external;
+    function setDelay(uint64 seconds_) external;
 
     /// @notice Empties the caller's namespace: every delegation it granted, and every commitment made in it
     ///         by anyone under any id, in one write. Nothing has to be enumerated first, which is the point
@@ -121,26 +121,26 @@ interface IDeployGate {
 
     /// @notice When a commitment becomes deployable, or zero when it already is. Set from the namespace's
     ///         delay at the moment a delegate commits, and never for what the namespace commits itself
-    function deployableAt(address namespace, bytes32 id) external view returns (uint256);
+    function deployableAt(address namespace, bytes32 id) external view returns (uint64);
 
     /// @notice How long a commitment made by one of `namespace`'s delegates waits before it is deployable
-    function delay(address namespace) external view returns (uint256);
+    function delay(address namespace) external view returns (uint64);
 
     /// @notice Generation of a commitment, which committing under the same id again replaces whole. It keeps
     ///         counting across a clearance, so what identifies a generation in the log is the term and the
     ///         nonce together: the nonce alone repeats nothing, but says nothing about which term holds it
-    function nonce(address namespace, bytes32 id) external view returns (uint256);
+    function nonce(address namespace, bytes32 id) external view returns (uint64);
 
     /// @notice How many contracts of a commitment have been deployed, and so which comes next. One cursor per
     ///         commitment, which is what lets several of them be in flight without interleaving
-    function deployed(address namespace, bytes32 id) external view returns (uint256);
+    function deployed(address namespace, bytes32 id) external view returns (uint64);
 
     /// @notice Whether `who` may commit in `namespace` on its behalf, in the term the namespace is in now
     function isDelegate(address namespace, address who) external view returns (bool);
 
     /// @notice Which term `namespace` is in. Everything it holds is keyed by it, so `clear` moving it is what
     ///         leaves the delegations and commitments of the term before holding nothing
-    function term(address namespace) external view returns (uint256);
+    function term(address namespace) external view returns (uint64);
 
     /// @notice Whether `who` may deploy what a commitment holds, under its live generation
     function isExecutor(address namespace, bytes32 id, address who) external view returns (bool);

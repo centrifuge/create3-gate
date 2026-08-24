@@ -325,16 +325,16 @@ contract DeployGateTest is Test, CreateXScript {
         vm.prank(DELEGATE);
         deployGate.commit(NAMESPACE, ID, salts, _hashes(initCodes), _executors(EXECUTOR));
 
-        uint256 deployableAt = block.timestamp + 6 hours;
-        assertEq(deployGate.deployableAt(NAMESPACE, ID), deployableAt, "the moment it becomes deployable");
+        uint64 deadline = uint64(block.timestamp + 6 hours);
+        assertEq(deployGate.deployableAt(NAMESPACE, ID), deadline, "the moment it becomes deployable");
 
-        vm.warp(deployableAt - 1);
+        vm.warp(deadline - 1);
         vm.prank(EXECUTOR);
-        vm.expectRevert(abi.encodeWithSelector(IDeployGate.NotYetDeployable.selector, deployableAt));
+        vm.expectRevert(abi.encodeWithSelector(IDeployGate.NotYetDeployable.selector, deadline));
         deployGate.deploy(NAMESPACE, ID, salts[0], initCodes[0]);
 
         // And the commitment is otherwise untouched: the delay holds it, it does not change it
-        vm.warp(deployableAt);
+        vm.warp(deadline);
         assertEq(Target(_deploy(salts, initCodes)[0]).value(), 1);
     }
 
@@ -385,15 +385,15 @@ contract DeployGateTest is Test, CreateXScript {
         vm.prank(DELEGATE);
         deployGate.commit(NAMESPACE, ID, salts, _hashes(initCodes), _executors(EXECUTOR));
 
-        uint256 deployableAt = block.timestamp + 6 hours;
+        uint64 deadline = uint64(block.timestamp + 6 hours);
 
         vm.prank(NAMESPACE);
         deployGate.setDelay(0);
-        assertEq(deployGate.deployableAt(NAMESPACE, ID), deployableAt, "still waiting out the delay it was made under");
+        assertEq(deployGate.deployableAt(NAMESPACE, ID), deadline, "still waiting out the delay it was made under");
 
-        vm.warp(deployableAt - 1);
+        vm.warp(deadline - 1);
         vm.prank(EXECUTOR);
-        vm.expectRevert(abi.encodeWithSelector(IDeployGate.NotYetDeployable.selector, deployableAt));
+        vm.expectRevert(abi.encodeWithSelector(IDeployGate.NotYetDeployable.selector, deadline));
         deployGate.deploy(NAMESPACE, ID, salts[0], initCodes[0]);
     }
 
@@ -463,7 +463,9 @@ contract DeployGateTest is Test, CreateXScript {
         vm.stopPrank();
 
         vm.expectEmit();
-        emit IDeployGate.Commit(NAMESPACE, ID, 1, 0, block.timestamp + 6 hours, salts, hashes, _executors(EXECUTOR));
+        emit IDeployGate.Commit(
+            NAMESPACE, ID, 1, 0, uint64(block.timestamp + 6 hours), salts, hashes, _executors(EXECUTOR)
+        );
 
         vm.prank(DELEGATE);
         deployGate.commit(NAMESPACE, ID, salts, hashes, _executors(EXECUTOR));
