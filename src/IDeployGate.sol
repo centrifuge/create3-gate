@@ -19,7 +19,7 @@ interface IDeployGate {
 
     event SetDelegate(address indexed namespace, address indexed delegatee, bool isValid);
     event SetDelay(address indexed namespace, uint64 seconds_);
-    event Clear(address indexed namespace, uint256 term);
+    event Clear(address indexed namespace, uint64 term);
     event Deploy(
         address indexed namespace, bytes32 indexed id, uint64 term, uint64 nonce, bytes32 salt, address indexed target
     );
@@ -134,39 +134,28 @@ interface IDeployGate {
     // View methods
     //----------------------------------------------------------------------------------------------
 
-    /// @notice When a commitment becomes deployable, or zero when it already is. Set from the namespace's
-    ///         delay at the moment a delegate commits, and never for what the namespace commits itself
-    function deployableAt(address namespace, bytes32 id) external view returns (uint64);
+    /// @notice What a namespace holds: the term everything in it hangs off, which `clear` moves, and the delay
+    ///         its delegates commit under
+    function namespaces(address namespace) external view returns (uint64 term, uint64 delay);
 
-    /// @notice How long a commitment made by one of `namespace`'s delegates waits before it is deployable
-    function delay(address namespace) external view returns (uint64);
-
-    /// @notice Generation of a commitment, which committing under the same id again replaces whole. It keeps
-    ///         counting across a clearance, so what identifies a generation in the log is the term and the
-    ///         nonce together: the nonce alone repeats nothing, but says nothing about which term holds it
-    function nonce(address namespace, bytes32 id) external view returns (uint64);
-
-    /// @notice How many contracts of a commitment have been deployed, and so which comes next. One of these
-    ///         per commitment, which is what lets several of them be in flight without interleaving
-    function cursor(address namespace, bytes32 id) external view returns (uint64);
+    /// @notice What an id holds: the generation standing under it, which committing again replaces whole and
+    ///         which keeps counting across a clearance; how far through that commitment the deployment has
+    ///         come, and so which contract comes next; and the moment the whole of it becomes deployable,
+    ///         zero when it already is. One cursor per id is what lets several commitments be in flight at
+    ///         once without interleaving
+    function commitments(address namespace, bytes32 id)
+        external
+        view
+        returns (uint64 nonce, uint64 cursor, uint64 deployableAt);
 
     /// @notice Whether `who` may commit in `namespace` on its behalf, in the term the namespace is in now
     function isDelegate(address namespace, address who) external view returns (bool);
-
-    /// @notice Which term `namespace` is in. Everything it holds is keyed by it, so `clear` moving it is what
-    ///         leaves the delegations and commitments of the term before holding nothing
-    function term(address namespace) external view returns (uint64);
 
     /// @notice Whether `who` may deploy what a commitment holds, under its live generation
     function isExecutor(address namespace, bytes32 id, address who) external view returns (bool);
 
     /// @notice What `salt` carries under a commitment's live generation, or zero when it carries nothing
     function committed(address namespace, bytes32 id, bytes32 salt) external view returns (bytes32);
-
-    /// @notice What a commitment's grants hang off: the namespace, the term it was made in, and the id. The
-    ///         term is in it so that ending one leaves every commitment made under it holding nothing,
-    ///         without the gate having to walk ids it was never told about
-    function scopeOf(address namespace, bytes32 id) external view returns (bytes32);
 
     /// @notice What a salt carries once committed, which a caller reproduces to deploy it
     function commitment(bytes32 initCodeHash, uint256 index) external pure returns (bytes32);

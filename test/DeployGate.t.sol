@@ -80,10 +80,30 @@ contract DeployGateTest is Test, CreateXScript {
         }
     }
 
+    function _nonce(address namespace, bytes32 id) internal view returns (uint64 nonce) {
+        (nonce,,) = deployGate.commitments(namespace, id);
+    }
+
+    function _cursor(address namespace, bytes32 id) internal view returns (uint64 cursor) {
+        (, cursor,) = deployGate.commitments(namespace, id);
+    }
+
+    function _deployableAt(address namespace, bytes32 id) internal view returns (uint64 deployableAt) {
+        (,, deployableAt) = deployGate.commitments(namespace, id);
+    }
+
+    function _term(address namespace) internal view returns (uint64 term) {
+        (term,) = deployGate.namespaces(namespace);
+    }
+
+    function _delay(address namespace) internal view returns (uint64 delay) {
+        (, delay) = deployGate.namespaces(namespace);
+    }
+
     // Namespaces
 
     function testEmptyNamespace() public view {
-        assertEq(deployGate.nonce(NAMESPACE, ID), 0, "nothing committed yet");
+        assertEq(_nonce(NAMESPACE, ID), 0, "nothing committed yet");
         assertFalse(deployGate.isExecutor(NAMESPACE, ID, EXECUTOR), "and so nobody may deploy in it");
     }
 
@@ -179,7 +199,7 @@ contract DeployGateTest is Test, CreateXScript {
         deployGate.clear();
         vm.stopPrank();
 
-        assertEq(deployGate.term(NAMESPACE), 1, "a further term");
+        assertEq(_term(NAMESPACE), 1, "a further term");
 
         // The namespace reads as empty, both what the delegate committed and what the namespace did
         assertEq(deployGate.committed(NAMESPACE, ID, salts[0]), 0, "the namespace's commitment holds nothing");
@@ -230,7 +250,7 @@ contract DeployGateTest is Test, CreateXScript {
         deployGate.clear();
 
         _validate(salts, initCodes);
-        assertEq(deployGate.nonce(NAMESPACE, ID), 2, "the second generation of that id");
+        assertEq(_nonce(NAMESPACE, ID), 2, "the second generation of that id");
         assertEq(Target(_deploy(salts, initCodes)[0]).value(), 1);
     }
 
@@ -246,8 +266,8 @@ contract DeployGateTest is Test, CreateXScript {
         vm.prank(DELEGATE);
         deployGate.clear();
 
-        assertEq(deployGate.term(DELEGATE), 1, "the delegate ended its own term");
-        assertEq(deployGate.term(NAMESPACE), 0, "and none of the namespace's");
+        assertEq(_term(DELEGATE), 1, "the delegate ended its own term");
+        assertEq(_term(NAMESPACE), 0, "and none of the namespace's");
         assertEq(Target(_deploy(salts, initCodes)[0]).value(), 1, "the commitment still deploys");
     }
 
@@ -326,7 +346,7 @@ contract DeployGateTest is Test, CreateXScript {
         deployGate.commit(NAMESPACE, ID, salts, _hashes(initCodes), _executors(EXECUTOR));
 
         uint64 deadline = uint64(block.timestamp + 6 hours);
-        assertEq(deployGate.deployableAt(NAMESPACE, ID), deadline, "the moment it becomes deployable");
+        assertEq(_deployableAt(NAMESPACE, ID), deadline, "the moment it becomes deployable");
 
         vm.warp(deadline - 1);
         vm.prank(EXECUTOR);
@@ -347,7 +367,7 @@ contract DeployGateTest is Test, CreateXScript {
 
         _validate(salts, initCodes);
 
-        assertEq(deployGate.deployableAt(NAMESPACE, ID), 0, "deployable at once");
+        assertEq(_deployableAt(NAMESPACE, ID), 0, "deployable at once");
         assertEq(Target(_deploy(salts, initCodes)[0]).value(), 1);
     }
 
@@ -367,9 +387,9 @@ contract DeployGateTest is Test, CreateXScript {
         deployGate.commit(NAMESPACE, ID, salts, _hashes(initCodes), _executors(EXECUTOR));
         vm.stopPrank();
 
-        assertEq(deployGate.delay(DELEGATE), 0, "its own namespace moved");
-        assertEq(deployGate.delay(NAMESPACE), 6 hours, "and the namespace's did not");
-        assertEq(deployGate.deployableAt(NAMESPACE, ID), block.timestamp + 6 hours, "so the commitment still waits");
+        assertEq(_delay(DELEGATE), 0, "its own namespace moved");
+        assertEq(_delay(NAMESPACE), 6 hours, "and the namespace's did not");
+        assertEq(_deployableAt(NAMESPACE, ID), block.timestamp + 6 hours, "so the commitment still waits");
     }
 
     /// @dev A commitment carries the moment it becomes deployable, so the knob reaches what comes after it
@@ -389,7 +409,7 @@ contract DeployGateTest is Test, CreateXScript {
 
         vm.prank(NAMESPACE);
         deployGate.setDelay(0);
-        assertEq(deployGate.deployableAt(NAMESPACE, ID), deadline, "still waiting out the delay it was made under");
+        assertEq(_deployableAt(NAMESPACE, ID), deadline, "still waiting out the delay it was made under");
 
         vm.warp(deadline - 1);
         vm.prank(EXECUTOR);
@@ -438,8 +458,8 @@ contract DeployGateTest is Test, CreateXScript {
         vm.prank(DELEGATE);
         deployGate.commit(NAMESPACE, ID, salts, _hashes(initCodes), _executors(EXECUTOR));
 
-        assertEq(deployGate.delay(NAMESPACE), 0);
-        assertEq(deployGate.deployableAt(NAMESPACE, ID), 0);
+        assertEq(_delay(NAMESPACE), 0);
+        assertEq(_deployableAt(NAMESPACE, ID), 0);
         assertEq(Target(_deploy(salts, initCodes)[0]).value(), 1);
     }
 
@@ -602,8 +622,8 @@ contract DeployGateTest is Test, CreateXScript {
         // Each carries its own cursor, so the two do not interleave
         vm.prank(EXECUTOR);
         deployGate.deploy(NAMESPACE, OTHER_ID, other[0], otherInitCodes[0]);
-        assertEq(deployGate.cursor(NAMESPACE, OTHER_ID), 1);
-        assertEq(deployGate.cursor(NAMESPACE, ID), 0, "the other commitment has not moved");
+        assertEq(_cursor(NAMESPACE, OTHER_ID), 1);
+        assertEq(_cursor(NAMESPACE, ID), 0, "the other commitment has not moved");
 
         assertEq(Target(_deploy(salts, initCodes)[0]).value(), 1, "and still deploys from its own first position");
     }
@@ -643,7 +663,7 @@ contract DeployGateTest is Test, CreateXScript {
         vm.prank(NAMESPACE);
         deployGate.commit(NAMESPACE, ID, left, leftHashes, _executors(other));
 
-        assertEq(deployGate.cursor(NAMESPACE, ID), 0, "the remainder starts from its own first position");
+        assertEq(_cursor(NAMESPACE, ID), 0, "the remainder starts from its own first position");
 
         for (uint256 i; i < 5; i++) {
             vm.prank(other);
@@ -663,13 +683,13 @@ contract DeployGateTest is Test, CreateXScript {
     function testReusingAnIdReplacesTheCommitment() public {
         (bytes32[] memory salts, bytes[] memory initCodes) = _pairs(1);
         _validate(salts, initCodes);
-        assertEq(deployGate.nonce(NAMESPACE, ID), 1);
+        assertEq(_nonce(NAMESPACE, ID), 1);
 
         (bytes32[] memory corrected, bytes[] memory correctedInitCodes) = _pairs(1);
         corrected[0] = _salt(501);
         _validate(corrected, correctedInitCodes);
 
-        assertEq(deployGate.nonce(NAMESPACE, ID), 2, "same id, next generation");
+        assertEq(_nonce(NAMESPACE, ID), 2, "same id, next generation");
         assertEq(deployGate.committed(NAMESPACE, ID, salts[0]), 0, "what it replaced is gone");
     }
 
@@ -703,7 +723,7 @@ contract DeployGateTest is Test, CreateXScript {
         assertEq(deployGate.committed(NAMESPACE, ID, salts[0]), deployGate.commitment(keccak256(initCodes[0]), 0));
         assertEq(deployGate.committed(NAMESPACE, ID, salts[1]), deployGate.commitment(keccak256(initCodes[1]), 1));
         assertTrue(deployGate.isExecutor(NAMESPACE, ID, EXECUTOR), "the executor may deploy it");
-        assertEq(deployGate.nonce(NAMESPACE, ID), 1, "the first commitment is the first nonce");
+        assertEq(_nonce(NAMESPACE, ID), 1, "the first commitment is the first nonce");
     }
 
     /// @dev A commitment replaces the whole previous one, so a salt dropped from the set must not linger as an
@@ -718,7 +738,7 @@ contract DeployGateTest is Test, CreateXScript {
         corrected[1] = _salt(101);
         _validate(corrected, correctedInitCodes);
 
-        assertEq(deployGate.nonce(NAMESPACE, ID), 2, "committing again starts a nonce");
+        assertEq(_nonce(NAMESPACE, ID), 2, "committing again starts a nonce");
         assertEq(deployGate.committed(NAMESPACE, ID, salts[0]), 0, "the dropped salts should be gone");
         assertEq(deployGate.committed(NAMESPACE, ID, salts[1]), 0, "the dropped salts should be gone");
 
@@ -949,7 +969,7 @@ contract DeployGateTest is Test, CreateXScript {
         deployGate.deploy(NAMESPACE, ID, salts[0], initCodes[0]);
         vm.prank(EXECUTOR);
         assertEq(Target(deployGate.deploy(NAMESPACE, ID, salts[1], initCodes[1])).value(), 2);
-        assertEq(deployGate.cursor(NAMESPACE, ID), 2, "the position advances with every deployment");
+        assertEq(_cursor(NAMESPACE, ID), 2, "the position advances with every deployment");
     }
 
     /// @dev A new commitment restarts the sequence, so the position left by a partial one cannot strand it
@@ -959,14 +979,14 @@ contract DeployGateTest is Test, CreateXScript {
 
         vm.prank(EXECUTOR);
         deployGate.deploy(NAMESPACE, ID, salts[0], initCodes[0]);
-        assertEq(deployGate.cursor(NAMESPACE, ID), 1);
+        assertEq(_cursor(NAMESPACE, ID), 1);
 
         (bytes32[] memory corrected, bytes[] memory correctedInitCodes) = _pairs(2);
         corrected[0] = _salt(200);
         corrected[1] = _salt(201);
         _validate(corrected, correctedInitCodes);
 
-        assertEq(deployGate.cursor(NAMESPACE, ID), 0, "the new commitment starts from its own first contract");
+        assertEq(_cursor(NAMESPACE, ID), 0, "the new commitment starts from its own first contract");
         assertEq(Target(_deploy(corrected, correctedInitCodes)[0]).value(), 1);
     }
 
@@ -987,7 +1007,7 @@ contract DeployGateTest is Test, CreateXScript {
 
         // The whole set committed again, which is what correcting one entry naively comes to
         _validate(salts, initCodes);
-        assertEq(deployGate.cursor(NAMESPACE, ID), 0, "back to the first entry");
+        assertEq(_cursor(NAMESPACE, ID), 0, "back to the first entry");
 
         // Whose address is taken, so the CREATE3 proxy is what stops it rather than the gate
         vm.prank(EXECUTOR);
@@ -999,7 +1019,7 @@ contract DeployGateTest is Test, CreateXScript {
         vm.expectRevert(abi.encodeWithSelector(IDeployGate.NotCommitted.selector, salts[2]));
         deployGate.deploy(NAMESPACE, ID, salts[2], initCodes[2]);
 
-        assertEq(deployGate.cursor(NAMESPACE, ID), 0, "the cursor cannot move past a taken address");
+        assertEq(_cursor(NAMESPACE, ID), 0, "the cursor cannot move past a taken address");
 
         // Having done it costs nothing but the signature that undoes it
         bytes32[] memory left = new bytes32[](2);
@@ -1022,7 +1042,7 @@ contract DeployGateTest is Test, CreateXScript {
             assertEq(Target(deployed).value(), i + 3);
         }
 
-        assertEq(deployGate.cursor(NAMESPACE, ID), 2, "the deployment finished after the stall");
+        assertEq(_cursor(NAMESPACE, ID), 2, "the deployment finished after the stall");
     }
 
     /// @dev Which is a property of the entry, not of the commitment: what sits before the taken address
@@ -1043,13 +1063,13 @@ contract DeployGateTest is Test, CreateXScript {
 
         vm.prank(EXECUTOR);
         assertEq(Target(deployGate.deploy(NAMESPACE, ID, next[0], nextInitCodes[0])).value(), 400);
-        assertEq(deployGate.cursor(NAMESPACE, ID), 1, "the fresh entry goes through");
+        assertEq(_cursor(NAMESPACE, ID), 1, "the fresh entry goes through");
 
         vm.prank(EXECUTOR);
         vm.expectRevert(IDeployGate.ProxyDeploymentFailed.selector);
         deployGate.deploy(NAMESPACE, ID, next[1], nextInitCodes[1]);
 
-        assertEq(deployGate.cursor(NAMESPACE, ID), 1, "and the sequence stops where the address is taken");
+        assertEq(_cursor(NAMESPACE, ID), 1, "and the sequence stops where the address is taken");
     }
 
     function testDeployConsumesTheCommitment() public {

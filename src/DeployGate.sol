@@ -25,11 +25,11 @@ import {IDeployGate} from "./IDeployGate.sol";
 ///         choose, and this contract's code is the whole of its authority.
 contract DeployGate is IDeployGate {
     // Namespaces
-    mapping(address namespace => Namespace) internal _namespaces;
+    mapping(address namespace => Namespace) public namespaces;
     mapping(address namespace => mapping(uint64 term => mapping(address who => bool))) internal _isDelegate;
 
     // Commitments
-    mapping(address namespace => mapping(bytes32 id => Commitment)) internal _commitments;
+    mapping(address namespace => mapping(bytes32 id => Commitment)) public commitments;
     mapping(bytes32 scope => mapping(uint64 nonce => mapping(address who => bool))) internal _executor;
     mapping(bytes32 scope => mapping(uint64 nonce => mapping(bytes32 salt => bytes32 hash))) internal _committed;
 
@@ -60,20 +60,21 @@ contract DeployGate is IDeployGate {
         bytes32[] calldata initCodeHashes,
         address[] calldata executors
     ) internal returns (uint64 current, uint64 startsAt, uint64 currentTerm) {
-        currentTerm = _namespaces[namespace].term;
+        currentTerm = namespaces[namespace].term;
 
         // A namespace's own commitment is deployable at once and a delegate's waits, which is the window in
         // which one nobody meant to make can still be cleared
-        startsAt = msg.sender == namespace ? 0 : _namespaces[namespace].delay;
-        if (startsAt != 0) startsAt += uint64(block.timestamp);
+        if (msg.sender != namespace) {
+            uint64 delay_ = namespaces[namespace].delay;
+            if (delay_ != 0) startsAt = uint64(block.timestamp) + delay_;
+        }
 
-        Commitment storage commitment_ = _commitments[namespace][id];
+        Commitment storage commitment_ = commitments[namespace][id];
         current = ++commitment_.nonce;
         commitment_.cursor = 0;
         commitment_.deployableAt = startsAt;
 
         bytes32 scope = _scopeOf(namespace, currentTerm, id);
-
         for (uint256 i; i < executors.length; i++) {
             _executor[scope][current][executors[i]] = true;
         }
@@ -89,21 +90,19 @@ contract DeployGate is IDeployGate {
 
     /// @inheritdoc IDeployGate
     function setDelegate(address delegatee, bool isValid) external {
-        _isDelegate[msg.sender][_namespaces[msg.sender].term][delegatee] = isValid;
+        _isDelegate[msg.sender][namespaces[msg.sender].term][delegatee] = isValid;
         emit SetDelegate(msg.sender, delegatee, isValid);
     }
 
     /// @inheritdoc IDeployGate
     function setDelay(uint64 seconds_) external {
-        _namespaces[msg.sender].delay = seconds_;
+        namespaces[msg.sender].delay = seconds_;
         emit SetDelay(msg.sender, seconds_);
     }
 
     /// @inheritdoc IDeployGate
     function clear() external {
-        // Delegations hang off the term as much as commitments do, so ending it is the whole of the call
-        uint256 current = ++_namespaces[msg.sender].term;
-
+        uint64 current = ++namespaces[msg.sender].term;
         emit Clear(msg.sender, current);
     }
 
@@ -116,8 +115,8 @@ contract DeployGate is IDeployGate {
         external
         returns (address target)
     {
-        Commitment storage commitment_ = _commitments[namespace][id];
-        uint64 currentTerm = _namespaces[namespace].term;
+        Commitment storage commitment_ = commitments[namespace][id];
+        uint64 currentTerm = namespaces[namespace].term;
         bytes32 scope = _scopeOf(namespace, currentTerm, id);
         uint64 current = commitment_.nonce;
         require(_executor[scope][current][msg.sender], NotExecutor());
@@ -140,48 +139,18 @@ contract DeployGate is IDeployGate {
     //----------------------------------------------------------------------------------------------
 
     /// @inheritdoc IDeployGate
-    function term(address namespace) external view returns (uint64) {
-        return _namespaces[namespace].term;
-    }
-
-    /// @inheritdoc IDeployGate
-    function delay(address namespace) external view returns (uint64) {
-        return _namespaces[namespace].delay;
-    }
-
-    /// @inheritdoc IDeployGate
-    function nonce(address namespace, bytes32 id) external view returns (uint64) {
-        return _commitments[namespace][id].nonce;
-    }
-
-    /// @inheritdoc IDeployGate
-    function cursor(address namespace, bytes32 id) external view returns (uint64) {
-        return _commitments[namespace][id].cursor;
-    }
-
-    /// @inheritdoc IDeployGate
     function isDelegate(address namespace, address who) public view returns (bool) {
-        return _isDelegate[namespace][_namespaces[namespace].term][who];
+        return _isDelegate[namespace][namespaces[namespace].term][who];
     }
 
     /// @inheritdoc IDeployGate
     function isExecutor(address namespace, bytes32 id, address who) external view returns (bool) {
-        return _executor[scopeOf(namespace, id)][_commitments[namespace][id].nonce][who];
+        return _executor[_scopeOf(namespace, namespaces[namespace].term, id)][commitments[namespace][id].nonce][who];
     }
 
     /// @inheritdoc IDeployGate
     function committed(address namespace, bytes32 id, bytes32 salt) external view returns (bytes32) {
-        return _committed[scopeOf(namespace, id)][_commitments[namespace][id].nonce][salt];
-    }
-
-    /// @inheritdoc IDeployGate
-    function deployableAt(address namespace, bytes32 id) external view returns (uint64) {
-        return _commitments[namespace][id].deployableAt;
-    }
-
-    /// @inheritdoc IDeployGate
-    function scopeOf(address namespace, bytes32 id) public view returns (bytes32) {
-        return _scopeOf(namespace, _namespaces[namespace].term, id);
+        return _committed[_scopeOf(namespace, namespaces[namespace].term, id)][commitments[namespace][id].nonce][salt];
     }
 
     function _scopeOf(address namespace, uint64 term_, bytes32 id) internal pure returns (bytes32) {
