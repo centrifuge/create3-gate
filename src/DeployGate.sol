@@ -5,10 +5,10 @@ import {Create3} from "./Create3.sol";
 import {IDeployGate} from "./IDeployGate.sol";
 
 /// @title  DeployGate
-/// @notice Deploys a set of contracts through CREATE3 in two steps: a namespace commits what may be
-///         deployed, where, in what order and by whom, and any of the executors it named then deploys it.
-///         Committing is one transaction whatever the contract count, and an executor gains no privilege
-///         beyond deploying exactly what was committed.
+/// @notice Deploys a set of contracts through CREATE3 in two steps. First an account commits what may be
+///         deployed in its namespace: which contracts, under which salts, in what order, and who may send
+///         them. Then any of the executors it named deploys them, one at a time and nothing else.
+///         Committing is one transaction whatever the contract count.
 ///
 ///         A namespace can let a delegate commit on its behalf, which is how a cold key keeps the addresses
 ///         while a warmer one signs. Two things bound what that costs if the delegate key is lost: what a

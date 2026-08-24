@@ -1,7 +1,7 @@
 # create3-gate
 
-A chain-agnostic, ownerless gate that splits CREATE3 deployment into a namespace that commits what should be
-deployed and executors that can deploy only that.
+A chain-agnostic, ownerless gate that splits CREATE3 deployment in two: an account commits what should be
+deployed, and executors deploy that and nothing else.
 
 ## What it is for
 
@@ -12,8 +12,8 @@ it cannot be a cold one, and it cannot be shared between two people without both
 whatever they like.
 
 The other half of the problem is arithmetic. The deployment this gate was built for is 56 contracts across
-eleven mainnets: 616 transactions, each signed by the deploying account, so 616 device confirmations on a hardware
-wallet, or 616 proposals behind a multisig. A ceremony nobody can realistically get through is one that ends up
+eleven mainnets: 616 transactions, each signed by the deploying account, so 616 device confirmations on a
+hardware wallet, or 616 proposals behind a multisig. A ceremony nobody can realistically get through is one that ends up
 being done by a hot key instead, which is how the account every address derives from becomes the least protected
 one in the deployment. Authorising a deployment wants a cold key signing once; sending it wants a warm key
 signing hundreds of times. One account cannot be both.
@@ -22,7 +22,7 @@ The `DeployGate` splits that in two.
 
 | Phase | Who signs | What it does | Transactions |
 |---|---|---|---|
-| Commit | the **namespace**, or one of its **delegates** | commits the `(salt, init code hash)` of every contract, in order, and names who may deploy them | **1 per chain**, whatever the contract count |
+| Commit | the **account** the namespace is named after, or one of its **delegates** | commits the `(salt, init code hash)` of every contract, in order, and names who may deploy them | **1 per chain**, whatever the contract count |
 | Deploy | any **executor** the commitment named | deploys the committed contracts, one at a time, and nothing else | one per contract |
 
 What comes out of that:
@@ -30,9 +30,9 @@ What comes out of that:
 - **The deployment is agreed to before it exists.** One transaction a multisig can sign, one log a reviewer can
   read back, and nothing deployed until the phase after it, so a commitment found to be wrong costs a
   re-commitment rather than a redeployment.
-- **The trusted account signs once per chain**, whatever the contract count: eleven signatures rather than 616,
-  with an executor key that can only produce what was committed sending the rest. That is what makes a hardware
-  wallet or a Safe a realistic namespace key.
+- **The trusted account signs once per chain**, whatever the contract count: eleven signatures rather than
+  616, with an executor key that can only produce what was committed sending the rest. That is what makes a
+  hardware wallet or a Safe a realistic account to name a namespace after.
 - **The two phases have to agree.** The deploy phase rebuilds each init code from scratch and has to land on
   exactly what was committed, so anything phase-dependent in a constructor argument (`msg.sender` is the
   classic) aborts with `NotCommitted` rather than deploying something else.
@@ -45,8 +45,8 @@ What comes out of that:
 
 Everything inside the gate lives in a **namespace**, which is named after the account that commits in it.
 Addresses derive from the gate, the namespace and the salt, so two namespaces can neither collide nor block
-each other, and one gate is safe for everyone to share. The gate itself has no roles: no owner, no admin, no wards, and no
-privilege over anything it deploys.
+each other, and one gate is safe for everyone to share. The gate itself has no roles: no owner, no admin, no
+wards, and no privilege over anything it deploys.
 
 There is no call that moves a namespace to another account. The account it is named after is what every
 address derives from, so it deliberately cannot be replaced. That key is the one that has to be looked after.
@@ -54,7 +54,7 @@ address derives from, so it deliberately cannot be replaced. That key is the one
 ### Commitments
 
 ```solidity
-gate.commit(namespace, id, salts, initCodeHashes, executors);   // the namespace, or a delegate
+gate.commit(namespace, id, salts, initCodeHashes, executors);   // the account it is named after, or a delegate
 gate.deploy(namespace, id, salts[0], initCodes[0]);             // any of the executors
 ```
 
@@ -76,14 +76,14 @@ how a cold key can be the thing every address derives from while a warmer one si
 
 Delegation goes one way and one level deep: `setDelegate` always writes to the *caller's own* namespace, so a
 delegate naming a delegate names it in its own, and nothing a delegate does can take the namespace away from
-the account it is named after. A leaked delegate key can commit, and is revoked in one call; it can never be
-walked outwards, and it can never lock the namespace out.
+the account it is named after. A leaked delegate key can commit, and nothing more: it can never be walked
+outwards, and it can never lock the namespace out.
 
-A delegate is trusted for as long as it holds the delegation: what it commits is committed, and `setDelegate`
-withdrawing one delegation reaches only what that delegate would commit next, leaving its standing commitments
-deployable, which is how a warm key is stood down once the phase it was granted for is over. That is why a
-delegation is granted with a delay, and why containing a key found to have leaked is `clear()`: one call, which
-withdraws every delegation along with everything any of them committed. Both are below.
+A delegate is trusted for as long as it holds the delegation: what it commits is committed, and withdrawing
+one delegation reaches only what that delegate would commit next, leaving what it already committed
+deployable. That is how a warm key is stood down once the phase it was granted for is over. Containing a key
+found to have leaked is the other case, and it is `clear()`: one call, which withdraws every delegation along
+with everything any of them committed. Both the delay that bounds a delegation and `clear()` are below.
 
 Revoking an **executor** key works the other way round, because executors belong to the commitment rather than
 sitting beside it: commit again without it, which replaces the set whole.
@@ -97,10 +97,10 @@ A delegate holds the warm key, and a warm key is the one that gets taken. What i
 gate.setDelay(6 hours);           // the namespace, for the delegates it grants
 ```
 
-A commitment made by a delegate is not deployable until the delay has passed. A commitment the namespace makes
-itself never waits, since the delay bounds the privilege it hands out and not the one it holds, and
-`setDelay` writes to the caller's own namespace like everything else, so a delegate cannot shorten the window
-it is committing under.
+A commitment made by a delegate is not deployable until the delay has passed. One made by the account itself
+never waits, since the delay bounds the privilege a namespace hands out and not the one it holds. `setDelay`
+writes to the caller's own namespace like everything else, so a delegate cannot shorten the window it is
+committing under.
 
 Without it, a delegation is a key that can spend any unspent address in the namespace at a moment of its own
 choosing, in a single transaction that commits and deploys together. That matters here more than it would
@@ -113,7 +113,7 @@ Two things follow from the delay being carried by the commitment rather than rea
 
 - **Changing it reaches what comes after it**, never what already stands. Lowering the delay does not release
   a commitment that is waiting, and raising it does not hold back one that is not.
-- **The window is only as useful as the response inside it.** Pick the delay against how long the namespace
+- **The window is only as useful as the response inside it.** Pick the delay against how long the account
   takes to sign a `clear()`, and against a monitor that is actually watching `Commit` events. The log
   carries the moment each commitment becomes deployable, so there is nothing to recompute. A namespace with no
   delegates needs no delay, and that is the default.
@@ -143,16 +143,15 @@ not need to know them, and it is what the delay leaves room for: a delay with no
 delay for nothing, and a revocation with no window is one racing a transaction that has already happened.
 
 Everything a namespace holds hangs off the **term** it was in at the time, its delegations as much as its
-commitments. `clear()` ends that term, so every commitment made in it under any id, by the namespace or by any
-delegate, along with every delegation it granted, stops counting in one write. Nothing has to be enumerated
-first, and nothing is recovered by finding it later: the namespace reads as empty afterwards, which is what the
-call is named after.
+commitments. `clear()` ends that term, so in one write every commitment made in it stops being deployable and
+every delegation granted in it stops being one. Nothing has to be enumerated first, and nothing is recovered by
+finding it later: the namespace reads as empty afterwards, which is what the call is named after.
 
 A term bounds what a commitment grants and never an address:
 
 - **The salts stay unspent.** Killing a commitment that was going to deploy at an address leaves that address
   free, so what the namespace meant to put there still can be.
-- **Committing again works as it did**, in the term the revocation opened. The generation of an id keeps
+- **Committing again works as it did**, in the term the clearance opened. The generation of an id keeps
   counting across it, so no two commitments under one id are ever the same generation in the log.
 - **It is the caller's own namespace**, like `setDelegate` and `setDelay`: a delegate calling `clear` empties
   its own and reaches nothing of the namespace it commits in.
@@ -185,7 +184,8 @@ contract, and exactly why the commitment has to bind the init code hash separate
 
 ### The gate's own address
 
-The gate is at `0x49196C553Ba258A745F8d699E3a07ecA5a498Af3` on every chain, and **anyone** can put it there. It
+The gate is at one address on every chain, `0xBF0D16caAC535Ce58762281A86Af7461657D4296` as pinned in
+`script/DeployGate.d.sol`, and **anyone** can put it there. It
 takes no constructor arguments and grants its deployer nothing, so there is nothing to configure and no order
 to get right: the first run that needs a gate deploys it, the way a deployment makes sure CreateX is there.
 
@@ -238,7 +238,7 @@ contract MyDeployer is DeployGateScript {
         vm.stopBroadcast();
     }
 
-    function execute() public {
+    function deploy() public {
         vm.startBroadcast();
         setUpDeployGate();
 

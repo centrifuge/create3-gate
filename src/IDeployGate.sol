@@ -2,15 +2,15 @@
 pragma solidity >=0.8.4;
 
 interface IDeployGate {
-    /// @dev What a namespace holds beside its commitments: the term everything in it hangs off, and the delay
-    ///      its delegates commit under. One slot, and nothing in it is going anywhere near 2^64
+    /// @dev What a namespace holds beside its commitments: the term everything in it hangs off, which `clear`
+    ///      moves, and the delay its delegates commit under
     struct Namespace {
         uint64 term;
         uint64 delay;
     }
 
-    /// @dev What an id holds: the generation of the commitment standing under it, how far through it the
-    ///      deployment has come, and the moment the whole of it becomes deployable
+    /// @dev What an id holds: the generation of the commitment standing under it, how many of that
+    ///      commitment's contracts have been deployed, and the moment the whole of it becomes deployable
     struct Commitment {
         uint64 nonce;
         uint64 cursor;
@@ -34,12 +34,17 @@ interface IDeployGate {
         address[] executors
     );
 
+    /// @dev The caller is neither the account the namespace is named after nor one of its delegates
     error NotAuthorized();
+    /// @dev The caller is not one of the executors the commitment named
     error NotExecutor();
+    /// @dev A salt without an init code hash, or an init code hash without a salt
     error LengthMismatch();
+    /// @dev The salt carries nothing at the position the commitment has reached, or carries other init code
     error NotCommitted(bytes32 salt);
+    /// @dev One commitment naming the same salt twice, which would leave one entry behind two positions
     error DuplicateSalt(bytes32 salt);
-    /// @dev The delay a delegate's commitment was made under has not passed yet
+    /// @dev The delay the commitment was made under has not passed yet
     error NotYetDeployable(uint64 deployableAt);
     /// @dev The salt is already spent: something stands at the address it names
     error ProxyDeploymentFailed();
@@ -50,61 +55,22 @@ interface IDeployGate {
     // Committing
     //----------------------------------------------------------------------------------------------
 
-    /// @notice Lets `delegatee` commit in the caller's namespace, or stops it. Always the caller's own: a
-    ///         delegate cannot name further delegates, and cannot take the namespace from the account it is
-    ///         named after, which is the one thing addresses derive from.
-    /// @dev    A delegate is trusted while it holds the delegation: what it commits is committed, and
-    ///         stopping it reaches only what it would commit next. What bounds that trust is `setDelay`:
-    ///         a delegate's commitment is not deployable until the delay has passed, so a commitment the
-    ///         namespace did not mean to make can still be cleared when it is seen. Granting a delegate
-    ///         with no delay set is granting a key that can spend any unspent address in the namespace at
-    ///         a moment of its own choosing, with nothing in between.
-    ///
-    ///         Withdrawing one delegation leaves the rest of the namespace as it was, commitments included,
-    ///         which is how a warm key is stood down once the phase it was granted for is over. `clear`
-    ///         is the other end of that: it withdraws every delegation at once, along with everything they
-    ///         committed.
-    function setDelegate(address delegatee, bool isValid) external;
-
-    /// @notice Sets how long a commitment made by one of the caller's delegates waits before it can be
-    ///         deployed. What the caller commits itself never waits: the delay bounds the privilege it hands
-    ///         out and not the one it holds, which is also why a delegate calling this sets its own
-    ///         namespace's delay and not the namespace it commits in.
-    /// @dev    Takes effect for commitments made after it, and reaches none that already stand: a commitment
-    ///         carries the moment it becomes deployable, so lowering the delay does not release what is
-    ///         waiting and raising it does not hold back what is not. `clear` is what reaches those.
-    ///
-    ///         Pick it against how long the namespace takes to sign a `clear`, since that is what the window
-    ///         is for: a delay shorter than its own response time buys nothing, and one that assumes nobody
-    ///         is watching for `Commit` events buys nothing either.
-    function setDelay(uint64 seconds_) external;
-
-    /// @notice Empties the caller's namespace: every delegation it granted, and every commitment made in it
-    ///         by anyone under any id, in one write. Nothing has to be enumerated first, which is the point:
-    ///         a delegate picks its own ids, so after a leaked key the ids to replace are not the ids the
-    ///         namespace knows.
-    /// @dev    What it does not touch is addresses. The salts stay unspent, so what was going to be deployed
-    ///         still can be, and anything already deployed stands. Committing again works as it did, in the
-    ///         term this opens; the generation of an id keeps counting across it, so no two commitments under
-    ///         one id are ever logged as the same one.
-    ///
-    ///         Always the caller's own namespace, like `setDelegate` and `setDelay`: a delegate calling it
-    ///         empties its own and reaches nothing of the namespace it commits in.
-    function clear() external;
-
-    /// @notice Commits what each salt may deploy, in what order, and who may deploy it. Committing under an
-    ///         id that already holds one replaces it whole, so whatever it does not mention becomes
-    ///         undeployable and committing nothing revokes it; committing under a fresh id leaves every
-    ///         other commitment alone, which is how several of them are kept in flight at once.
-    /// @param  namespace Namespace to commit in, which is what the addresses derive from alongside the salt.
-    ///         The caller has to be the account it is named after, or one of its delegates
+    /// @notice Commits which contracts may be deployed in `namespace`, in what order, and by whom. One
+    ///         transaction whatever the contract count.
+    /// @dev    Committing under an id that already holds a commitment replaces it whole, so whatever the new
+    ///         one does not mention stops being deployable, and committing nothing revokes it. Committing
+    ///         under a fresh id leaves every other commitment alone, which is how several are kept in flight
+    ///         at once. What a delegate commits is not deployable until the namespace's delay has passed.
+    /// @param  namespace Namespace to commit in, which the addresses derive from alongside the salt. The
+    ///         caller has to be the account it is named after, or one of its delegates
     /// @param  id Which of the namespace's commitments this is. Any 32 bytes, chosen by the caller. It scopes
-    ///         permission only: two commitments naming the same salt still point at the same address, and
-    ///         whichever deploys first takes it
+    ///         permission only: two commitments naming the same salt point at the same address, and whichever
+    ///         deploys first takes it
     /// @param  salts Salt of each contract, in deployment order. Any 32 bytes: the CREATE3 salt is derived
     /// @param  initCodeHashes Hash of the creation code, including constructor arguments, of each contract
     /// @param  executors Accounts allowed to deploy this commitment, and nothing else. None of them has to be
-    ///         the namespace, and none gains any privilege beyond deploying exactly what is committed here
+    ///         the account the namespace is named after, and none gains any privilege beyond deploying
+    ///         exactly what is committed here
     function commit(
         address namespace,
         bytes32 id,
@@ -113,12 +79,50 @@ interface IDeployGate {
         address[] calldata executors
     ) external;
 
+    /// @notice Lets `delegatee` commit in the caller's namespace, or stops it.
+    /// @dev    Always the caller's own namespace, so a delegate naming a delegate names it in its own, and
+    ///         nothing a delegate does can take a namespace from the account it is named after.
+    ///
+    ///         A delegate is trusted while it holds the delegation: what it commits is committed, and
+    ///         withdrawing the delegation reaches only what it would commit next, leaving what it already
+    ///         committed deployable. `setDelay` is what bounds that trust, and `clear` is what withdraws
+    ///         every delegation at once, along with everything they committed.
+    function setDelegate(address delegatee, bool isValid) external;
+
+    /// @notice Sets how long a commitment made by one of the caller's delegates waits before it can be
+    ///         deployed. What the caller commits itself never waits.
+    /// @dev    The delay bounds the privilege a namespace hands out and not the one it holds, which is why a
+    ///         delegate calling this sets the delay of its own namespace and not of the one it commits in.
+    ///
+    ///         A commitment carries the moment it becomes deployable, so this reaches commitments made after
+    ///         it and never those that already stand: `clear` is what reaches those. Pick it against how long
+    ///         the account behind the namespace takes to sign a `clear`, and against a monitor that is
+    ///         actually watching `Commit` events, since a window nobody watches or can act inside buys
+    ///         nothing.
+    function setDelay(uint64 seconds_) external;
+
+    /// @notice Empties the caller's namespace: every delegation it granted, and every commitment made in it
+    ///         by anyone under any id, in one write.
+    /// @dev    Nothing has to be enumerated first, which is the point: a delegate picks its own ids, so after
+    ///         a leaked key the ids to replace are not the ids anyone knows to look for.
+    ///
+    ///         Addresses are untouched. The salts stay unspent, so what was going to be deployed still can
+    ///         be, and anything already deployed stands. Committing again works as it did, in the term this
+    ///         opens, and the generation of an id keeps counting across it, so no two commitments under one
+    ///         id are ever logged as the same one.
+    ///
+    ///         Always the caller's own namespace, like `setDelegate` and `setDelay`.
+    function clear() external;
+
     //----------------------------------------------------------------------------------------------
     // Deployment
     //----------------------------------------------------------------------------------------------
 
     /// @notice Deploys the next contract of a commitment, and consumes it.
-    /// @dev    The cursor moves before the init code runs, so what the order binds is the order the
+    /// @dev    Reverts until the commitment's `deployableAt` has passed, and reverts unless the init code
+    ///         hashes to what the commitment holds at the position it has reached.
+    ///
+    ///         The cursor moves before the init code runs, so what the order binds is the order the
     ///         deployments were invoked in and not the order their constructors finished: a constructor
     ///         reaching an executor can have the next contract of the same commitment deployed inside it.
     /// @param  namespace Namespace the contract was committed in, which is what its address derives from
@@ -134,36 +138,36 @@ interface IDeployGate {
     // View methods
     //----------------------------------------------------------------------------------------------
 
-    /// @notice What a namespace holds: the term everything in it hangs off, which `clear` moves, and the delay
-    ///         its delegates commit under
+    /// @notice What `namespace` holds: the term everything in it hangs off, which `clear` moves, and the
+    ///         delay its delegates commit under
     function namespaces(address namespace) external view returns (uint64 term, uint64 delay);
 
-    /// @notice What an id holds: the generation standing under it, which committing again replaces whole and
-    ///         which keeps counting across a clearance; how far through that commitment the deployment has
-    ///         come, and so which contract comes next; and the moment the whole of it becomes deployable,
-    ///         zero when it already is. One cursor per id is what lets several commitments be in flight at
-    ///         once without interleaving
+    /// @notice What `id` holds in `namespace`: the generation of the commitment standing under it, which
+    ///         committing again replaces and which keeps counting across a `clear`; how many of that
+    ///         commitment's contracts have been deployed, and so which one comes next; and the moment the
+    ///         whole of it becomes deployable, zero when it already is
     function commitments(address namespace, bytes32 id)
         external
         view
         returns (uint64 nonce, uint64 cursor, uint64 deployableAt);
 
-    /// @notice Whether `who` may commit in `namespace` on its behalf, in the term the namespace is in now
+    /// @notice Whether `who` may commit in `namespace`, in the term it is in now
     function isDelegate(address namespace, address who) external view returns (bool);
 
-    /// @notice Whether `who` may deploy what a commitment holds, under its live generation
+    /// @notice Whether `who` may deploy what the commitment standing under `id` holds
     function isExecutor(address namespace, bytes32 id, address who) external view returns (bool);
 
-    /// @notice What `salt` carries under a commitment's live generation, or zero when it carries nothing
+    /// @notice What `salt` carries under the commitment standing under `id`, or zero when it carries nothing
     function committed(address namespace, bytes32 id, bytes32 salt) external view returns (bytes32);
 
-    /// @notice What a salt carries once committed, which a caller reproduces to deploy it
+    /// @notice What a salt carries once committed: the hash of its init code, bound to its position in the
+    ///         order. An executor reproduces this to deploy
     function commitment(bytes32 initCodeHash, uint256 index) external pure returns (bytes32);
 
     /// @notice CREATE3 salt that `namespace` deploys `salt` under, which is the whole of what separates one
     ///         namespace from the next: 32 bytes, none of them spent on anything else. Nothing chain-specific
     ///         goes into it, so a namespace is the same set of addresses on every chain. The commitment id is
-    ///         not in it either: where a contract lands does not depend on which commitment authorised it.
+    ///         not in it either: where a contract lands does not depend on which commitment authorised it
     function namespaceSalt(address namespace, bytes32 salt) external pure returns (bytes32);
 
     /// @notice Address `salt` deploys to in `namespace`, whether or not it has been deployed yet
