@@ -4,6 +4,7 @@ pragma solidity >=0.8.4;
 interface IDeployGate {
     event SetDelegate(address indexed validator, address indexed delegatee, bool isValid);
     event RevokeAll(address indexed validator, uint256 term);
+    event SetDelay(address indexed validator, uint256 seconds_);
     event Deploy(
         address indexed validator, bytes32 indexed id, uint256 term, uint256 nonce, bytes32 salt, address indexed target
     );
@@ -12,6 +13,7 @@ interface IDeployGate {
         bytes32 indexed id,
         uint256 indexed nonce,
         uint256 term,
+        uint256 validAt,
         bytes32[] salts,
         bytes32[] initCodeHashes,
         address[] executors
@@ -19,6 +21,8 @@ interface IDeployGate {
 
     error NotValidator();
     error NotExecutor();
+    /// @dev The delay a delegate's commitment was made under has not passed yet
+    error NotYetValid(uint256 validAt);
     error LengthMismatch();
     error NotValidated(bytes32 salt);
     error DuplicateSalt(bytes32 salt);
@@ -35,22 +39,42 @@ interface IDeployGate {
     ///         delegate cannot name further delegates, and cannot take the namespace from the account it is
     ///         named after, which is the one thing addresses derive from.
     /// @dev    A delegate is trusted while it holds the delegation: what it commits is committed, and
-    ///         stopping it reaches only what it would commit next. A key found to have leaked is therefore
-    ///         two calls rather than one, since what it already committed — under ids the validator may
-    ///         never have seen — goes with `revokeAll`. This one comes first: `revokeAll` opens a term, and
-    ///         an account still holding the delegation commits in it as it did in the last.
+    ///         stopping it reaches only what it would commit next. What bounds that trust is `setDelay`:
+    ///         a delegate's commitment is not deployable until the delay has passed, so a commitment the
+    ///         validator did not mean to make can still be revoked when it is seen. Granting a delegate
+    ///         with no delay set is granting a key that can spend any unspent address in the namespace at
+    ///         a moment of its own choosing, with nothing in between.
+    ///
+    ///         Withdrawing a leaked delegation comes before `revokeAll`, not after: `revokeAll` opens a
+    ///         term, and an account still holding the delegation commits in it as it did in the last.
     function setDelegate(address delegatee, bool isValid) external;
 
     /// @notice Ends the caller's current term, which makes everything committed in it undeployable at once,
     ///         whatever id holds it and whoever committed it. The namespace reads as empty afterwards and
     ///         commits again as it did, since a term bounds what a commitment grants and never an address:
     ///         the salts stay unspent, so what was going to be deployed still can be.
-    /// @dev    This is what contains a leaked delegate key. Revoking the delegate stops it committing again;
-    ///         this reaches what it committed while it held the delegation, without the validator first
-    ///         having to find which ids that was. Do the revocations first, in the same transaction where
-    ///         one is available: this ends a term and opens the next, and a delegate still holding the
-    ///         delegation can commit in the new one, which would put back what this call took away.
+    /// @dev    This is what the delay leaves room for, and the only cancellation that reaches a commitment
+    ///         under an id the validator was never told about — which is every id a delegate picks for
+    ///         itself. A delay with no `revokeAll` is a window with nothing to do in it, and a `revokeAll`
+    ///         with no delay is a revocation racing a transaction that has already happened.
+    ///
+    ///         Withdraw the delegations first, in the same transaction where one is available: this ends a
+    ///         term and opens the next, and a delegate still holding the delegation commits in the new one,
+    ///         which would put back what this call took away.
     function revokeAll() external;
+
+    /// @notice Sets how long a commitment made by one of the caller's delegates waits before it can be
+    ///         deployed. What the caller commits itself never waits: the delay bounds the privilege it hands
+    ///         out and not the one it holds, which is also why a delegate calling this sets its own
+    ///         namespace's delay and not the namespace it commits in.
+    /// @dev    Takes effect for commitments made after it, and reaches none that already stand: a commitment
+    ///         carries the moment it becomes deployable, so lowering the delay does not release what is
+    ///         waiting and raising it does not hold back what is not. `revokeAll` is what reaches those.
+    ///
+    ///         Pick it against how long the validator takes to sign a `revokeAll`, since that is what the
+    ///         window is for: a delay shorter than the validator's own response time buys nothing, and one
+    ///         that assumes nobody is watching for `Validate` events buys nothing either.
+    function setDelay(uint256 seconds_) external;
 
     /// @notice Commits what each salt may deploy, in what order, and who may deploy it. Committing under an
     ///         id that already holds one replaces it whole, so whatever it does not mention becomes
@@ -93,6 +117,13 @@ interface IDeployGate {
     //----------------------------------------------------------------------------------------------
     // View methods
     //----------------------------------------------------------------------------------------------
+
+    /// @notice When a commitment becomes deployable, or zero when it already is. Set from the namespace's
+    ///         delay at the moment a delegate commits, and never for what the validator commits itself
+    function validAt(address validator, bytes32 id) external view returns (uint256);
+
+    /// @notice How long a commitment made by one of `validator`'s delegates waits before it is deployable
+    function delay(address validator) external view returns (uint256);
 
     /// @notice Generation of a commitment, which committing under the same id again replaces whole. It keeps
     ///         counting across a revocation, so what identifies a generation in the log is the term and the

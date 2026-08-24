@@ -19,11 +19,13 @@ import {IDeployGate} from "./IDeployGate.sol";
 ///         choose, and this contract's code is the whole of its authority.
 contract DeployGate is IDeployGate {
     mapping(address validator => uint256) public term;
+    mapping(address validator => uint256) public delay;
     mapping(address validator => mapping(bytes32 id => uint256)) public nonce;
     mapping(address validator => mapping(bytes32 id => uint256)) public deployed;
     mapping(address validator => mapping(address who => bool)) public isDelegate;
     mapping(bytes32 scope => mapping(uint256 nonce => mapping(address who => bool))) internal _executor;
     mapping(bytes32 scope => mapping(uint256 nonce => mapping(bytes32 salt => bytes32 hash))) internal _validated;
+    mapping(bytes32 scope => mapping(uint256 nonce => uint256)) internal _validAt;
 
     //----------------------------------------------------------------------------------------------
     // Validation
@@ -40,9 +42,40 @@ contract DeployGate is IDeployGate {
         require(msg.sender == validator || isDelegate[validator][msg.sender], NotValidator());
         require(salts.length == initCodeHashes.length, LengthMismatch());
 
-        bytes32 scope = scopeOf(validator, id);
         uint256 current = ++nonce[validator][id];
+        uint256 startsAt = _open(validator, id, current, salts, initCodeHashes, executors);
+
+        // One event for the whole commitment, so that it can be read back from a single log. It carries the
+        // generation it opens, term and nonce together, which is what everything it grants is keyed by:
+        // without them a reader has to count the commitments that came before to know which of them the gate
+        // still enforces, and cannot tell a commitment a revocation has since emptied from a live one. The
+        // moment it becomes deployable is here too, so that a monitor watching for what nobody meant to
+        // commit reads the deadline it has to act by out of the same entry
+        emit Validate(validator, id, current, term[validator], startsAt, salts, initCodeHashes, executors);
+    }
+
+    /// @dev Everything the commitment writes, kept out of `validate` so that what it logs still fits on the
+    ///      stack beside it
+    function _open(
+        address validator,
+        bytes32 id,
+        uint256 current,
+        bytes32[] calldata salts,
+        bytes32[] calldata initCodeHashes,
+        address[] calldata executors
+    ) internal returns (uint256 startsAt) {
+        bytes32 scope = scopeOf(validator, id);
         deployed[validator][id] = 0;
+
+        // What the validator commits itself is deployable at once, and what it commits through a delegate
+        // waits: the delay is the window in which a commitment nobody meant to make can still be revoked,
+        // and the validator needs none against itself. Zero is left unwritten, which is also what a
+        // commitment made before the namespace had a delay reads as
+        startsAt = msg.sender == validator ? 0 : delay[validator];
+        if (startsAt != 0) {
+            startsAt += block.timestamp;
+            _validAt[scope][current] = startsAt;
+        }
 
         for (uint256 i; i < executors.length; i++) {
             _executor[scope][current][executors[i]] = true;
@@ -55,18 +88,18 @@ contract DeployGate is IDeployGate {
 
             _validated[scope][current][salts[i]] = commitment(initCodeHashes[i], i);
         }
-
-        // One event for the whole commitment, so that it can be read back from a single log. It carries the
-        // generation it opens, term and nonce together, which is what everything it grants is keyed by:
-        // without them a reader has to count the commitments that came before to know which of them the gate
-        // still enforces, and cannot tell a commitment a revocation has since emptied from a live one
-        emit Validate(validator, id, current, term[validator], salts, initCodeHashes, executors);
     }
 
     /// @inheritdoc IDeployGate
     function setDelegate(address delegatee, bool isValid) external {
         isDelegate[msg.sender][delegatee] = isValid;
         emit SetDelegate(msg.sender, delegatee, isValid);
+    }
+
+    /// @inheritdoc IDeployGate
+    function setDelay(uint256 seconds_) external {
+        delay[msg.sender] = seconds_;
+        emit SetDelay(msg.sender, seconds_);
     }
 
     /// @inheritdoc IDeployGate
@@ -91,6 +124,9 @@ contract DeployGate is IDeployGate {
         uint256 current = nonce[validator][id];
         require(_executor[scope][current][msg.sender], NotExecutor());
 
+        uint256 startsAt = _validAt[scope][current];
+        require(block.timestamp >= startsAt, NotYetValid(startsAt));
+
         bytes32 expected = commitment(keccak256(initCode), deployed[validator][id]);
         require(_validated[scope][current][salt] == expected, NotValidated(salt));
 
@@ -108,6 +144,11 @@ contract DeployGate is IDeployGate {
     /// @inheritdoc IDeployGate
     function isExecutor(address validator, bytes32 id, address who) external view returns (bool) {
         return _executor[scopeOf(validator, id)][nonce[validator][id]][who];
+    }
+
+    /// @inheritdoc IDeployGate
+    function validAt(address validator, bytes32 id) external view returns (uint256) {
+        return _validAt[scopeOf(validator, id)][nonce[validator][id]];
     }
 
     /// @inheritdoc IDeployGate

@@ -287,6 +287,165 @@ contract DeployGateTest is Test, CreateXScript {
         deployGate.validate(VALIDATOR, OTHER_ID, salts, _hashes(initCodes), _executors(EXECUTOR));
     }
 
+    // Delays
+
+    /// @dev The whole of what a delay is for: a delegate commits, and nothing is deployable until the window
+    ///      the validator gave itself to notice has passed
+    function testDelegateCommitmentWaitsForTheDelay() public {
+        (bytes32[] memory salts, bytes[] memory initCodes) = _pairs(1);
+
+        vm.startPrank(VALIDATOR);
+        deployGate.setDelay(6 hours);
+        deployGate.setDelegate(DELEGATE, true);
+        vm.stopPrank();
+
+        vm.prank(DELEGATE);
+        deployGate.validate(VALIDATOR, ID, salts, _hashes(initCodes), _executors(EXECUTOR));
+
+        uint256 validAt = block.timestamp + 6 hours;
+        assertEq(deployGate.validAt(VALIDATOR, ID), validAt, "the moment it becomes deployable");
+
+        vm.warp(validAt - 1);
+        vm.prank(EXECUTOR);
+        vm.expectRevert(abi.encodeWithSelector(IDeployGate.NotYetValid.selector, validAt));
+        deployGate.deploy(VALIDATOR, ID, salts[0], initCodes[0]);
+
+        // And the commitment is otherwise untouched: the delay holds it, it does not change it
+        vm.warp(validAt);
+        assertEq(Target(_deploy(salts, initCodes)[0]).value(), 1);
+    }
+
+    /// @dev The delay bounds the privilege the validator hands out, not the one it holds
+    function testValidatorCommitmentIsNeverDelayed() public {
+        (bytes32[] memory salts, bytes[] memory initCodes) = _pairs(1);
+
+        vm.prank(VALIDATOR);
+        deployGate.setDelay(6 hours);
+
+        _validate(salts, initCodes);
+
+        assertEq(deployGate.validAt(VALIDATOR, ID), 0, "deployable at once");
+        assertEq(Target(_deploy(salts, initCodes)[0]).value(), 1);
+    }
+
+    /// @dev A delegate committing for the validator is delayed by the validator's delay, and `setDelay` is
+    ///      the caller's own namespace like everything else: a leaked delegate key cannot shorten its own
+    ///      window, which is what would make the window worthless
+    function testDelegateCannotSetTheValidatorsDelay() public {
+        (bytes32[] memory salts, bytes[] memory initCodes) = _pairs(1);
+
+        vm.startPrank(VALIDATOR);
+        deployGate.setDelay(6 hours);
+        deployGate.setDelegate(DELEGATE, true);
+        vm.stopPrank();
+
+        vm.startPrank(DELEGATE);
+        deployGate.setDelay(0);
+        deployGate.validate(VALIDATOR, ID, salts, _hashes(initCodes), _executors(EXECUTOR));
+        vm.stopPrank();
+
+        assertEq(deployGate.delay(DELEGATE), 0, "its own namespace moved");
+        assertEq(deployGate.delay(VALIDATOR), 6 hours, "and the validator's did not");
+        assertEq(deployGate.validAt(VALIDATOR, ID), block.timestamp + 6 hours, "so the commitment still waits");
+    }
+
+    /// @dev A commitment carries the moment it becomes deployable, so the knob reaches what comes after it
+    ///      and never what already stands. `revokeAll` is what reaches those
+    function testChangingTheDelayLeavesStandingCommitmentsAlone() public {
+        (bytes32[] memory salts, bytes[] memory initCodes) = _pairs(1);
+
+        vm.startPrank(VALIDATOR);
+        deployGate.setDelay(6 hours);
+        deployGate.setDelegate(DELEGATE, true);
+        vm.stopPrank();
+
+        vm.prank(DELEGATE);
+        deployGate.validate(VALIDATOR, ID, salts, _hashes(initCodes), _executors(EXECUTOR));
+
+        uint256 validAt = block.timestamp + 6 hours;
+
+        vm.prank(VALIDATOR);
+        deployGate.setDelay(0);
+        assertEq(deployGate.validAt(VALIDATOR, ID), validAt, "still waiting out the delay it was made under");
+
+        vm.warp(validAt - 1);
+        vm.prank(EXECUTOR);
+        vm.expectRevert(abi.encodeWithSelector(IDeployGate.NotYetValid.selector, validAt));
+        deployGate.deploy(VALIDATOR, ID, salts[0], initCodes[0]);
+    }
+
+    /// @dev The pair working as one: the delay is the window, and `revokeAll` is what the validator does in
+    ///      it, including against an id it was never told about
+    function testRevokeAllCancelsWithinTheDelay() public {
+        (bytes32[] memory salts, bytes[] memory initCodes) = _pairs(1);
+
+        vm.startPrank(VALIDATOR);
+        deployGate.setDelay(6 hours);
+        deployGate.setDelegate(DELEGATE, true);
+        vm.stopPrank();
+
+        // An id of the delegate's own choosing, which is what a per-id replacement cannot reach
+        vm.prank(DELEGATE);
+        deployGate.validate(VALIDATOR, OTHER_ID, salts, _hashes(initCodes), _executors(EXECUTOR));
+
+        vm.startPrank(VALIDATOR);
+        deployGate.setDelegate(DELEGATE, false);
+        deployGate.revokeAll();
+        vm.stopPrank();
+
+        vm.warp(block.timestamp + 6 hours);
+
+        vm.prank(EXECUTOR);
+        vm.expectRevert(IDeployGate.NotExecutor.selector);
+        deployGate.deploy(VALIDATOR, OTHER_ID, salts[0], initCodes[0]);
+
+        // And the address it was going to take is still the validator's to spend
+        _validate(salts, initCodes);
+        assertEq(Target(_deploy(salts, initCodes)[0]).value(), 1);
+    }
+
+    /// @dev Nothing waits in a namespace that never set a delay, which is what every namespace reads as
+    ///      until it says otherwise
+    function testNoDelayByDefault() public {
+        (bytes32[] memory salts, bytes[] memory initCodes) = _pairs(1);
+
+        vm.prank(VALIDATOR);
+        deployGate.setDelegate(DELEGATE, true);
+
+        vm.prank(DELEGATE);
+        deployGate.validate(VALIDATOR, ID, salts, _hashes(initCodes), _executors(EXECUTOR));
+
+        assertEq(deployGate.delay(VALIDATOR), 0);
+        assertEq(deployGate.validAt(VALIDATOR, ID), 0);
+        assertEq(Target(_deploy(salts, initCodes)[0]).value(), 1);
+    }
+
+    function testSetDelayEmitsEvent() public {
+        vm.expectEmit();
+        emit IDeployGate.SetDelay(VALIDATOR, 6 hours);
+
+        vm.prank(VALIDATOR);
+        deployGate.setDelay(6 hours);
+    }
+
+    /// @dev The delay is in the log the commitment is read back from, since a monitor that has to compute it
+    ///      from a delay it did not see set is a monitor that can be wrong about when it has to act
+    function testValidateEmitsTheDelay() public {
+        (bytes32[] memory salts, bytes[] memory initCodes) = _pairs(1);
+        bytes32[] memory hashes = _hashes(initCodes);
+
+        vm.startPrank(VALIDATOR);
+        deployGate.setDelay(6 hours);
+        deployGate.setDelegate(DELEGATE, true);
+        vm.stopPrank();
+
+        vm.expectEmit();
+        emit IDeployGate.Validate(VALIDATOR, ID, 1, 0, block.timestamp + 6 hours, salts, hashes, _executors(EXECUTOR));
+
+        vm.prank(DELEGATE);
+        deployGate.validate(VALIDATOR, ID, salts, hashes, _executors(EXECUTOR));
+    }
+
     function testRevokeAllEmitsEvent() public {
         vm.expectEmit();
         emit IDeployGate.RevokeAll(VALIDATOR, 1);
@@ -611,7 +770,7 @@ contract DeployGateTest is Test, CreateXScript {
         // One event carries the whole commitment: which generation it opens, what may be deployed, and who
         // may deploy it
         vm.expectEmit();
-        emit IDeployGate.Validate(VALIDATOR, ID, 1, 0, salts, initCodeHashes, _executors(EXECUTOR));
+        emit IDeployGate.Validate(VALIDATOR, ID, 1, 0, 0, salts, initCodeHashes, _executors(EXECUTOR));
 
         vm.prank(VALIDATOR);
         deployGate.validate(VALIDATOR, ID, salts, initCodeHashes, _executors(EXECUTOR));
@@ -629,7 +788,7 @@ contract DeployGateTest is Test, CreateXScript {
         deployGate.revokeAll();
 
         vm.expectEmit();
-        emit IDeployGate.Validate(VALIDATOR, ID, 2, 1, salts, hashes, _executors(EXECUTOR));
+        emit IDeployGate.Validate(VALIDATOR, ID, 2, 1, 0, salts, hashes, _executors(EXECUTOR));
 
         deployGate.validate(VALIDATOR, ID, salts, hashes, _executors(EXECUTOR));
         vm.stopPrank();

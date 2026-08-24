@@ -80,14 +80,45 @@ the account it is named after. A leaked delegate key can commit, and is revoked 
 walked outwards, and it can never lock the validator out.
 
 A delegate is trusted for as long as it holds the delegation: what it commits is committed, and `setDelegate`
-withdrawing the delegation reaches only what it would commit next. Containing a key found to have leaked is
-therefore two calls rather than one, the second being `revokeAll()` — and in that order. `revokeAll()` ends the
-term the leaked key committed in and opens the next; an account still holding the delegation commits in the new
-term as it did in the old, and would put back what the revocation took away. Withdraw every delegation that is
-in doubt first, in one transaction with the `revokeAll()` where the validator can batch them.
+withdrawing the delegation reaches only what it would commit next. That is why a delegation is granted with a
+delay — see below — and why containing a key found to have leaked is two calls rather than one, the second
+being `revokeAll()`, in that order. `revokeAll()` ends the term the leaked key committed in and opens the next;
+an account still holding the delegation commits in the new term as it did in the old, and would put back what
+the revocation took away. Withdraw every delegation that is in doubt first, in one transaction with the
+`revokeAll()` where the validator can batch them.
 
 Revoking an **executor** key works the other way round, because executors belong to the commitment rather than
 sitting beside it: commit again without it, which replaces the set whole.
+
+### Delays
+
+A delegate holds the warm key, and a warm key is the one that gets taken. What it can do with it is bounded by
+`setDelay(seconds)`:
+
+```solidity
+gate.setDelay(6 hours);           // the validator, for its own namespace
+```
+
+A commitment made by a delegate is not deployable until the delay has passed. A commitment the validator makes
+itself never waits — the delay bounds the privilege the namespace hands out, not the one it holds — and
+`setDelay` writes to the caller's own namespace like everything else, so a delegate cannot shorten the window
+it is committing under.
+
+Without it, a delegation is a key that can spend any unspent address in the namespace at a moment of its own
+choosing, in a single transaction that commits and deploys together. That matters here more than it would
+elsewhere, because the addresses this gate reserves are the same on every chain: a salt spent on one chain and
+unspent on the other ten is the normal state of a deployment in progress, and anyone holding the delegate key
+can put its own code at those ten addresses the moment it sees the first one. There is no window to react in,
+which is what the delay creates and `revokeAll()` then uses.
+
+Two things follow from the delay being carried by the commitment rather than read at deploy time:
+
+- **Changing it reaches what comes after it**, never what already stands. Lowering the delay does not release
+  a commitment that is waiting, and raising it does not hold back one that is not.
+- **The window is only as useful as the response inside it.** Pick the delay against how long the validator
+  takes to sign a `revokeAll()`, and against a monitor that is actually watching `Validate` events — the log
+  carries the moment each commitment becomes deployable, so there is nothing to recompute. A namespace with no
+  delegates needs no delay, and that is the default.
 
 ### Why the executors need no trust
 
@@ -110,7 +141,8 @@ Three things all have to be committed for that to hold:
 
 Replacing a commitment revokes what it held, but that is per id, and a delegate picks its own ids: after a
 leaked delegate key, the ids to replace are not all ids the validator knows. `revokeAll()` is the call that
-does not need to know them.
+does not need to know them, and it is what the delay leaves room for: a delay with nothing to do in the window
+is a delay for nothing, and a revocation with no window is one racing a transaction that has already happened.
 
 Every commitment hangs off the **term** its namespace was in when it was made. `revokeAll()` ends that term, so
 everything committed in it — under any id, by the validator or by any delegate — stops being deployable in one
