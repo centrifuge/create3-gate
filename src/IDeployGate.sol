@@ -87,6 +87,16 @@ interface IDeployGate {
     ///         withdrawing the delegation reaches only what it would commit next, leaving what it already
     ///         committed deployable. `setDelay` is what bounds that trust, and `clear` is what withdraws
     ///         every delegation at once, along with everything they committed.
+    ///
+    ///         Set the delay before granting the delegation, not after. A commitment takes the delay the
+    ///         namespace had at the moment it was made, so a delegate granted while the delay is zero can
+    ///         commit something deployable at once, and setting a delay afterwards does not reach it.
+    ///
+    ///         What the delay bounds is what a delegate can deploy, never what it can undo. Committing
+    ///         under an id replaces what stands there in the same block, so a delegate can cancel the
+    ///         namespace's own commitments as fast as they are made, and keep doing it until the delegation
+    ///         is withdrawn. Nothing is lost by that: the salts stay unspent and committing again is a
+    ///         signature, but a deployment in progress does not finish while it is going on.
     function setDelegate(address delegatee, bool isValid) external;
 
     /// @notice Sets how long a commitment made by one of the caller's delegates waits before it can be
@@ -95,10 +105,15 @@ interface IDeployGate {
     ///         delegate calling this sets the delay of its own namespace and not of the one it commits in.
     ///
     ///         A commitment carries the moment it becomes deployable, so this reaches commitments made after
-    ///         it and never those that already stand: `clear` is what reaches those. Pick it against how long
-    ///         the account behind the namespace takes to sign a `clear`, and against a monitor that is
-    ///         actually watching `Commit` events, since a window nobody watches or can act inside buys
-    ///         nothing.
+    ///         it and never those that already stand, a delegate's included: `clear` is what reaches those.
+    ///         Set it before granting a delegation rather than after, or the first thing that delegation
+    ///         commits is deployable at once.
+    ///
+    ///         Pick it against how long the account behind the namespace takes to sign a `clear` on every
+    ///         chain it has a namespace on, since a term is per chain and so is the containment, and against
+    ///         a monitor that is actually watching `Commit` events. A window nobody watches or can act
+    ///         inside buys nothing. There is no cap: a delay large enough to overflow the timestamp makes
+    ///         every delegate commitment revert, and the useful range is hours.
     function setDelay(uint64 seconds_) external;
 
     /// @notice Empties the caller's namespace: every delegation it granted, and every commitment made in it
