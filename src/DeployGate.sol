@@ -57,9 +57,10 @@ contract DeployGate is IDeployGate {
         }
 
         // One event for the whole commitment, so that it can be read back from a single log. It carries the
-        // generation it opens, which is what everything it grants is keyed by: without it a reader has to
-        // count the commitments that came before to know which of them the gate still enforces
-        emit Validate(validator, id, current, salts, initCodeHashes, executors);
+        // generation it opens, term and nonce together, which is what everything it grants is keyed by:
+        // without them a reader has to count the commitments that came before to know which of them the gate
+        // still enforces, and cannot tell a commitment a revocation has since emptied from a live one
+        emit Validate(validator, id, current, term[validator], salts, initCodeHashes, executors);
     }
 
     /// @inheritdoc IDeployGate
@@ -97,7 +98,7 @@ contract DeployGate is IDeployGate {
         ++deployed[validator][id];
 
         target = Create3.deploy(namespaceSalt(validator, salt), initCode);
-        emit Deploy(validator, id, current, salt, target);
+        emit Deploy(validator, id, term[validator], current, salt, target);
     }
 
     //----------------------------------------------------------------------------------------------

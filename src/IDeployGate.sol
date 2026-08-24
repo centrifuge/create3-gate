@@ -4,11 +4,14 @@ pragma solidity >=0.8.4;
 interface IDeployGate {
     event SetDelegate(address indexed validator, address indexed delegatee, bool isValid);
     event RevokeAll(address indexed validator, uint256 term);
-    event Deploy(address indexed validator, bytes32 indexed id, uint256 nonce, bytes32 salt, address indexed target);
+    event Deploy(
+        address indexed validator, bytes32 indexed id, uint256 term, uint256 nonce, bytes32 salt, address indexed target
+    );
     event Validate(
         address indexed validator,
         bytes32 indexed id,
         uint256 indexed nonce,
+        uint256 term,
         bytes32[] salts,
         bytes32[] initCodeHashes,
         address[] executors
@@ -91,7 +94,9 @@ interface IDeployGate {
     // View methods
     //----------------------------------------------------------------------------------------------
 
-    /// @notice Generation of a commitment, which committing under the same id again replaces whole
+    /// @notice Generation of a commitment, which committing under the same id again replaces whole. It keeps
+    ///         counting across a revocation, so what identifies a generation in the log is the term and the
+    ///         nonce together: the nonce alone repeats nothing, but says nothing about which term holds it
     function nonce(address validator, bytes32 id) external view returns (uint256);
 
     /// @notice How many contracts of a commitment have been deployed, and so which comes next. One cursor per

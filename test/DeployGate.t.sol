@@ -611,10 +611,33 @@ contract DeployGateTest is Test, CreateXScript {
         // One event carries the whole commitment: which generation it opens, what may be deployed, and who
         // may deploy it
         vm.expectEmit();
-        emit IDeployGate.Validate(VALIDATOR, ID, 1, salts, initCodeHashes, _executors(EXECUTOR));
+        emit IDeployGate.Validate(VALIDATOR, ID, 1, 0, salts, initCodeHashes, _executors(EXECUTOR));
 
         vm.prank(VALIDATOR);
         deployGate.validate(VALIDATOR, ID, salts, initCodeHashes, _executors(EXECUTOR));
+    }
+
+    /// @dev The nonce keeps counting across a revocation, so it is the term and the nonce together that say
+    ///      which generation a log entry belongs to. A reader with only the nonce cannot tell a commitment
+    ///      that a revocation has since emptied from the one that replaced it
+    function testTheLogCarriesTheTerm() public {
+        (bytes32[] memory salts, bytes[] memory initCodes) = _pairs(1);
+        bytes32[] memory hashes = _hashes(initCodes);
+
+        vm.startPrank(VALIDATOR);
+        deployGate.validate(VALIDATOR, ID, salts, hashes, _executors(EXECUTOR));
+        deployGate.revokeAll();
+
+        vm.expectEmit();
+        emit IDeployGate.Validate(VALIDATOR, ID, 2, 1, salts, hashes, _executors(EXECUTOR));
+
+        deployGate.validate(VALIDATOR, ID, salts, hashes, _executors(EXECUTOR));
+        vm.stopPrank();
+
+        vm.expectEmit();
+        emit IDeployGate.Deploy(VALIDATOR, ID, 1, 2, salts[0], deployGate.addressOf(VALIDATOR, salts[0]));
+
+        _deploy(salts, initCodes);
     }
 
     function testValidateLengthMismatch() public {
@@ -670,7 +693,7 @@ contract DeployGateTest is Test, CreateXScript {
         _validate(salts, initCodes);
 
         vm.expectEmit();
-        emit IDeployGate.Deploy(VALIDATOR, ID, 1, salts[0], deployGate.addressOf(VALIDATOR, salts[0]));
+        emit IDeployGate.Deploy(VALIDATOR, ID, 0, 1, salts[0], deployGate.addressOf(VALIDATOR, salts[0]));
 
         _deploy(salts, initCodes);
     }
