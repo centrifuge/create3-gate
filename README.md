@@ -12,7 +12,7 @@ it cannot be a cold one, and it cannot be shared between two people without both
 whatever they like.
 
 The other half of the problem is arithmetic. The deployment this gate was built for is 56 contracts across
-eleven mainnets — 616 transactions, each signed by the deploying account: 616 device confirmations on a hardware
+eleven mainnets: 616 transactions, each signed by the deploying account, so 616 device confirmations on a hardware
 wallet, or 616 proposals behind a multisig. A ceremony nobody can realistically get through is one that ends up
 being done by a hot key instead, which is how the account every address derives from becomes the least protected
 one in the deployment. Authorising a deployment wants a cold key signing once; sending it wants a warm key
@@ -28,7 +28,7 @@ The `DeployGate` splits that in two.
 What comes out of that:
 
 - **The deployment is agreed to before it exists.** One transaction a multisig can sign, one log a reviewer can
-  read back, and nothing deployed until the phase after it — so a commitment found to be wrong costs a
+  read back, and nothing deployed until the phase after it, so a commitment found to be wrong costs a
   re-commitment rather than a redeployment.
 - **The trusted account signs once per chain**, whatever the contract count: eleven signatures rather than 616,
   with an executor key that can only produce what was committed sending the rest. That is what makes a hardware
@@ -49,7 +49,7 @@ each other, and one gate is safe for everyone to share. The gate itself has no r
 privilege over anything it deploys.
 
 There is no call that moves a namespace to another account. The account it is named after is what every
-address derives from, so it deliberately cannot be replaced — that key is the one that has to be looked after.
+address derives from, so it deliberately cannot be replaced. That key is the one that has to be looked after.
 
 ### Commitments
 
@@ -60,7 +60,7 @@ gate.deploy(namespace, id, salts[0], initCodes[0]);             // any of the ex
 
 A namespace can hold several commitments at once, told apart by an **id** it picks:
 
-- Committing under an id that already holds a commitment **replaces it whole** — salts and executors alike.
+- Committing under an id that already holds a commitment **replaces it whole**, salts and executors alike.
   Committing nothing revokes it outright. Whatever a new commitment does not mention becomes undeployable, so
   a superseded set cannot be spent afterwards.
 - Committing under a fresh id leaves every other commitment alone. Each id carries its own generation
@@ -81,7 +81,7 @@ walked outwards, and it can never lock the namespace out.
 
 A delegate is trusted for as long as it holds the delegation: what it commits is committed, and `setDelegate`
 withdrawing one delegation reaches only what that delegate would commit next, leaving its standing commitments
-deployable — which is how a warm key is stood down once the phase it was granted for is over. That is why a
+deployable, which is how a warm key is stood down once the phase it was granted for is over. That is why a
 delegation is granted with a delay, and why containing a key found to have leaked is `clear()`: one call, which
 withdraws every delegation along with everything any of them committed. Both are below.
 
@@ -98,7 +98,7 @@ gate.setDelay(6 hours);           // the namespace, for the delegates it grants
 ```
 
 A commitment made by a delegate is not deployable until the delay has passed. A commitment the namespace makes
-itself never waits — the delay bounds the privilege it hands out, not the one it holds — and
+itself never waits, since the delay bounds the privilege it hands out and not the one it holds, and
 `setDelay` writes to the caller's own namespace like everything else, so a delegate cannot shorten the window
 it is committing under.
 
@@ -114,7 +114,7 @@ Two things follow from the delay being carried by the commitment rather than rea
 - **Changing it reaches what comes after it**, never what already stands. Lowering the delay does not release
   a commitment that is waiting, and raising it does not hold back one that is not.
 - **The window is only as useful as the response inside it.** Pick the delay against how long the namespace
-  takes to sign a `clear()`, and against a monitor that is actually watching `Commit` events — the log
+  takes to sign a `clear()`, and against a monitor that is actually watching `Commit` events. The log
   carries the moment each commitment becomes deployable, so there is nothing to recompute. A namespace with no
   delegates needs no delay, and that is the default.
 
@@ -131,8 +131,8 @@ Three things all have to be committed for that to hold:
   commitment, and strand the intended address.
 - **The order**, which is the one thing left for it to choose, and it is not inert: a constructor reading a
   dependency the deployment itself wires would see a different value depending on when it ran, and bake it
-  into its runtime code. A commitment binds each contract to its position — `commitment(initCodeHash, index)`
-  — and the gate keeps a cursor per commitment, so a contract deployed out of turn reverts rather than landing
+  into its runtime code. A commitment binds each contract to its position, `commitment(initCodeHash, index)`,
+  and the gate keeps a cursor per commitment, so a contract deployed out of turn reverts rather than landing
   early.
 
 ### Emptying a namespace
@@ -142,7 +142,7 @@ leaked delegate key, the ids to replace are not all ids the namespace knows. `cl
 not need to know them, and it is what the delay leaves room for: a delay with nothing to do in the window is a
 delay for nothing, and a revocation with no window is one racing a transaction that has already happened.
 
-Everything a namespace holds hangs off the **term** it was in at the time — its delegations as much as its
+Everything a namespace holds hangs off the **term** it was in at the time, its delegations as much as its
 commitments. `clear()` ends that term, so every commitment made in it under any id, by the namespace or by any
 delegate, along with every delegation it granted, stops counting in one write. Nothing has to be enumerated
 first, and nothing is recovered by finding it later: the namespace reads as empty afterwards, which is what the
@@ -181,7 +181,7 @@ Three things follow from that:
 `addressOf(namespace, salt)` computes the result, deployed or not.
 
 CREATE3 addresses ignore the init code, which is what keeps an address still when a patch release changes a
-contract — and exactly why the commitment has to bind the init code hash separately.
+contract, and exactly why the commitment has to bind the init code hash separately.
 
 ### The gate's own address
 
@@ -190,7 +190,7 @@ takes no constructor arguments and grants its deployer nothing, so there is noth
 to get right: the first run that needs a gate deploys it, the way a deployment makes sure CreateX is there.
 
 It is deployed through CreateX's `deployCreate2`, not `deployCreate3`, which is what makes that safe: a CREATE2
-address covers the init code, so the only contract that fits the gate's address is the gate — and this
+address covers the init code, so the only contract that fits the gate's address is the gate, and this
 contract's code is the whole of its authority. The salt is zero throughout, the one combination CreateX derives
 from the salt alone, so the address is the same everywhere. It needs
 [CreateX](https://github.com/pcaversaccio/createx) at `0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed` on the chain
@@ -206,7 +206,7 @@ compiled with, produces a different gate at a different address, and every addre
 src/DeployGate.sol          the gate
 src/Create3.sol             the CREATE3 derivation it deploys through
 src/IDeployGate.sol         its interface, and where each call is documented in full
-script/DeployGate.d.sol     salt, address, extcodehash and creation code — what a consumer holds the gate by
+script/DeployGate.d.sol     salt, address, extcodehash and creation code: what a consumer holds the gate by
 script/DeployGateScript.sol brings the gate up in a forge script or test, as CreateXScript does for CreateX
 test/DeployGate.t.sol       behaviour, plus the check that keeps DeployGate.d.sol honest
 ```
@@ -271,5 +271,5 @@ forge fmt
 ```
 
 `foundry.toml` pins the compiler settings the gate's bytecode was derived from. Changing them, or the contract,
-moves the constants in `script/DeployGate.d.sol` — and with them every address the gate would ever produce, so it
+moves the constants in `script/DeployGate.d.sol`, and with them every address the gate would ever produce, so it
 is a decision rather than a chore.

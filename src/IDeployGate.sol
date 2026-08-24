@@ -80,8 +80,8 @@ interface IDeployGate {
     function setDelay(uint64 seconds_) external;
 
     /// @notice Empties the caller's namespace: every delegation it granted, and every commitment made in it
-    ///         by anyone under any id, in one write. Nothing has to be enumerated first, which is the point
-    ///         — a delegate picks its own ids, so after a leaked key the ids to replace are not the ids the
+    ///         by anyone under any id, in one write. Nothing has to be enumerated first, which is the point:
+    ///         a delegate picks its own ids, so after a leaked key the ids to replace are not the ids the
     ///         namespace knows.
     /// @dev    What it does not touch is addresses. The salts stay unspent, so what was going to be deployed
     ///         still can be, and anything already deployed stands. Committing again works as it did, in the

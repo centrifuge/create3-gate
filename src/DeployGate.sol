@@ -10,11 +10,10 @@ import {IDeployGate} from "./IDeployGate.sol";
 ///         Committing is one transaction whatever the contract count, and an executor gains no privilege
 ///         beyond deploying exactly what was committed.
 ///
-///         What a namespace cannot hand out safely is the committing itself, since a key that commits picks
-///         the addresses. It can delegate it anyway, bounded two ways: what a delegate commits waits out the
-///         namespace's delay before it is deployable, and `clear` empties the namespace — delegations and
-///         commitments alike — in one write. A leaked delegate key is then a window and a single call rather
-///         than a race against a transaction that has already happened.
+///         A namespace can let a delegate commit on its behalf, which is how a cold key keeps the addresses
+///         while a warmer one signs. Two things bound what that costs if the delegate key is lost: what a
+///         delegate commits is not deployable until the namespace's delay has passed, and `clear` empties
+///         the namespace in one call, delegations and commitments alike.
 ///
 /// @dev    One gate serves everyone: it takes no constructor arguments, holds no privilege of its own, and
 ///         holds none over anything it deploys, so it is the same contract at the same address on every

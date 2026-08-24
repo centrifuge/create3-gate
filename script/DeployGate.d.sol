@@ -2,7 +2,7 @@
 pragma solidity >=0.5.0;
 
 /// @dev Zero throughout: no sender in the first 20 bytes, no redeploy protection in the 21st, which is the
-///      one combination CreateX turns into `keccak256(abi.encode(salt))` — neither the caller's nor the
+///      one combination CreateX turns into `keccak256(abi.encode(salt))`, neither the caller's nor the
 ///      chain's. Nothing needs encoding here, since the CREATE2 address already covers the init code.
 bytes32 constant DEPLOY_GATE_SALT = bytes32(0);
 

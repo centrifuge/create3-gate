@@ -629,7 +629,7 @@ contract DeployGateTest is Test, CreateXScript {
     }
 
     /// @dev A commitment binds each contract to its position *within that commitment*, and an address derives
-    ///      from the namespace and the salt alone — not from the position, the generation, or the id. So a
+    ///      from the namespace and the salt alone, not from the position, the generation, or the id. So a
     ///      commitment naming only what a stopped run has left to deploy gives those contracts fresh positions
     ///      and still lands them exactly where the first commitment intended. This is the gate's own answer to
     ///      a run that cannot be continued: re-commit the remainder, to whoever is going to deploy it
@@ -992,8 +992,8 @@ contract DeployGateTest is Test, CreateXScript {
 
     /// @dev The reset shows when the replacement names salts the interrupted run already deployed. The cursor
     ///      goes back to the first entry, that entry's address already holds code, and the proxy refuses to
-    ///      deploy over it — while each entry is bound to its position, so an executor cannot step over the one
-    ///      that reverts. That commitment stalls where it stands, and it costs a signature rather than a
+    ///      deploy over it, while each entry is bound to its position, so an executor cannot step over the
+    ///      one that reverts. That commitment stalls where it stands, and it costs a signature rather than a
     ///      deployment: nothing is deployed, no address is lost, and the next commitment replaces it whole, so
     ///      naming the remainder picks the run straight back up
     function testRevalidatingSaltsAlreadyDeployedStallsUntilTheRemainder() public {
