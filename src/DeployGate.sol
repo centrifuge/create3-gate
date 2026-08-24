@@ -70,6 +70,7 @@ contract DeployGate is IDeployGate {
 
         Commitment storage commitment_ = commitments[namespace][id];
         current = ++commitment_.nonce;
+        commitment_.term = currentTerm;
         commitment_.cursor = 0;
         commitment_.deployableAt = startsAt;
 

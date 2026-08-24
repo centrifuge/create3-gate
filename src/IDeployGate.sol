@@ -9,9 +9,12 @@ interface IDeployGate {
         uint64 delay;
     }
 
-    /// @dev What an id holds: the generation of the commitment standing under it, how many of that
-    ///      commitment's contracts have been deployed, and the moment the whole of it becomes deployable
+    /// @dev What an id holds: which generation of which term the commitment standing under it belongs to,
+    ///      how many of its contracts have been deployed, and the moment the whole of it becomes deployable.
+    ///      The term is here because this is the one thing an id keeps across a `clear`, so without it a
+    ///      reader cannot tell a commitment the clearance emptied from one that still stands
     struct Commitment {
+        uint64 term;
         uint64 nonce;
         uint64 cursor;
         uint64 deployableAt;
@@ -157,14 +160,19 @@ interface IDeployGate {
     ///         delay its delegates commit under
     function namespaces(address namespace) external view returns (uint64 term, uint64 delay);
 
-    /// @notice What `id` holds in `namespace`: the generation of the commitment standing under it, which
-    ///         committing again replaces and which keeps counting across a `clear`; how many of that
-    ///         commitment's contracts have been deployed, and so which one comes next; and the moment the
-    ///         whole of it becomes deployable, zero when it already is
+    /// @notice What `id` holds in `namespace`: the term the commitment standing under it was made in, which
+    ///         is live only while it equals the namespace's own; the generation, which committing again
+    ///         replaces and which keeps counting across a `clear`; how many of that commitment's contracts
+    ///         have been deployed, and so which one comes next; and the moment the whole of it becomes
+    ///         deployable, zero when it already is.
+    /// @dev    A `clear` leaves all four standing, since what it moves is the namespace's term rather than
+    ///         anything under the id. Compare `term` here against `namespaces(namespace).term` before
+    ///         reading the rest as something that can still happen: `isExecutor` and `committed` already
+    ///         answer for the live term and report nothing once it has moved
     function commitments(address namespace, bytes32 id)
         external
         view
-        returns (uint64 nonce, uint64 cursor, uint64 deployableAt);
+        returns (uint64 term, uint64 nonce, uint64 cursor, uint64 deployableAt);
 
     /// @notice Whether `who` may commit in `namespace`, in the term it is in now
     function isDelegate(address namespace, address who) external view returns (bool);

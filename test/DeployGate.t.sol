@@ -81,15 +81,19 @@ contract DeployGateTest is Test, CreateXScript {
     }
 
     function _nonce(address namespace, bytes32 id) internal view returns (uint64 nonce) {
-        (nonce,,) = deployGate.commitments(namespace, id);
+        (, nonce,,) = deployGate.commitments(namespace, id);
     }
 
     function _cursor(address namespace, bytes32 id) internal view returns (uint64 cursor) {
-        (, cursor,) = deployGate.commitments(namespace, id);
+        (,, cursor,) = deployGate.commitments(namespace, id);
     }
 
     function _deployableAt(address namespace, bytes32 id) internal view returns (uint64 deployableAt) {
-        (,, deployableAt) = deployGate.commitments(namespace, id);
+        (,,, deployableAt) = deployGate.commitments(namespace, id);
+    }
+
+    function _commitmentTerm(address namespace, bytes32 id) internal view returns (uint64 term) {
+        (term,,,) = deployGate.commitments(namespace, id);
     }
 
     function _term(address namespace) internal view returns (uint64 term) {
@@ -293,6 +297,34 @@ contract DeployGateTest is Test, CreateXScript {
         vm.prank(DELEGATE);
         vm.expectRevert(IDeployGate.NotAuthorized.selector);
         deployGate.commit(NAMESPACE, OTHER_ID, salts, _hashes(initCodes), _executors(EXECUTOR));
+    }
+
+    /// @dev A clearance moves the namespace's term and leaves everything under the id standing, so what says
+    ///      whether a commitment can still happen is the term it was made in. Without it on the commitment,
+    ///      a reader of the live generation and its deadline cannot tell an emptied one from a standing one
+    function testACommitmentSaysWhichTermItWasMadeIn() public {
+        (bytes32[] memory salts, bytes[] memory initCodes) = _pairs(1);
+
+        vm.startPrank(NAMESPACE);
+        deployGate.setDelay(6 hours);
+        deployGate.setDelegate(DELEGATE, true);
+        vm.stopPrank();
+
+        vm.prank(DELEGATE);
+        deployGate.commit(NAMESPACE, ID, salts, _hashes(initCodes), _executors(EXECUTOR));
+
+        assertEq(_commitmentTerm(NAMESPACE, ID), 0, "made in the term the namespace was in");
+        assertEq(_commitmentTerm(NAMESPACE, ID), _term(NAMESPACE), "which is the one it is in, so it stands");
+
+        vm.prank(NAMESPACE);
+        deployGate.clear();
+
+        // Everything under the id reads as it did, which is what the term is there to qualify
+        assertEq(_nonce(NAMESPACE, ID), 1, "the generation is still reported");
+        assertGt(_deployableAt(NAMESPACE, ID), 0, "and so is the deadline it was waiting on");
+        assertEq(_commitmentTerm(NAMESPACE, ID), 0, "in the term before this one");
+        assertEq(_term(NAMESPACE), 1, "so it is not the live term, and nothing under the id can happen");
+        assertFalse(deployGate.isExecutor(NAMESPACE, ID, EXECUTOR));
     }
 
     /// @dev Granting again lands in the term the clearance opened, and reaches nothing of the term before it
