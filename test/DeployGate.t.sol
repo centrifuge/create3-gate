@@ -602,8 +602,8 @@ contract DeployGateTest is Test, CreateXScript {
         // Each carries its own cursor, so the two do not interleave
         vm.prank(EXECUTOR);
         deployGate.deploy(NAMESPACE, OTHER_ID, other[0], otherInitCodes[0]);
-        assertEq(deployGate.deployed(NAMESPACE, OTHER_ID), 1);
-        assertEq(deployGate.deployed(NAMESPACE, ID), 0, "the other commitment has not moved");
+        assertEq(deployGate.cursor(NAMESPACE, OTHER_ID), 1);
+        assertEq(deployGate.cursor(NAMESPACE, ID), 0, "the other commitment has not moved");
 
         assertEq(Target(_deploy(salts, initCodes)[0]).value(), 1, "and still deploys from its own first position");
     }
@@ -643,7 +643,7 @@ contract DeployGateTest is Test, CreateXScript {
         vm.prank(NAMESPACE);
         deployGate.commit(NAMESPACE, ID, left, leftHashes, _executors(other));
 
-        assertEq(deployGate.deployed(NAMESPACE, ID), 0, "the remainder starts from its own first position");
+        assertEq(deployGate.cursor(NAMESPACE, ID), 0, "the remainder starts from its own first position");
 
         for (uint256 i; i < 5; i++) {
             vm.prank(other);
@@ -949,7 +949,7 @@ contract DeployGateTest is Test, CreateXScript {
         deployGate.deploy(NAMESPACE, ID, salts[0], initCodes[0]);
         vm.prank(EXECUTOR);
         assertEq(Target(deployGate.deploy(NAMESPACE, ID, salts[1], initCodes[1])).value(), 2);
-        assertEq(deployGate.deployed(NAMESPACE, ID), 2, "the position advances with every deployment");
+        assertEq(deployGate.cursor(NAMESPACE, ID), 2, "the position advances with every deployment");
     }
 
     /// @dev A new commitment restarts the sequence, so the position left by a partial one cannot strand it
@@ -959,14 +959,14 @@ contract DeployGateTest is Test, CreateXScript {
 
         vm.prank(EXECUTOR);
         deployGate.deploy(NAMESPACE, ID, salts[0], initCodes[0]);
-        assertEq(deployGate.deployed(NAMESPACE, ID), 1);
+        assertEq(deployGate.cursor(NAMESPACE, ID), 1);
 
         (bytes32[] memory corrected, bytes[] memory correctedInitCodes) = _pairs(2);
         corrected[0] = _salt(200);
         corrected[1] = _salt(201);
         _validate(corrected, correctedInitCodes);
 
-        assertEq(deployGate.deployed(NAMESPACE, ID), 0, "the new commitment starts from its own first contract");
+        assertEq(deployGate.cursor(NAMESPACE, ID), 0, "the new commitment starts from its own first contract");
         assertEq(Target(_deploy(corrected, correctedInitCodes)[0]).value(), 1);
     }
 
@@ -987,7 +987,7 @@ contract DeployGateTest is Test, CreateXScript {
 
         // The whole set committed again, which is what correcting one entry naively comes to
         _validate(salts, initCodes);
-        assertEq(deployGate.deployed(NAMESPACE, ID), 0, "back to the first entry");
+        assertEq(deployGate.cursor(NAMESPACE, ID), 0, "back to the first entry");
 
         // Whose address is taken, so the CREATE3 proxy is what stops it rather than the gate
         vm.prank(EXECUTOR);
@@ -999,7 +999,7 @@ contract DeployGateTest is Test, CreateXScript {
         vm.expectRevert(abi.encodeWithSelector(IDeployGate.NotCommitted.selector, salts[2]));
         deployGate.deploy(NAMESPACE, ID, salts[2], initCodes[2]);
 
-        assertEq(deployGate.deployed(NAMESPACE, ID), 0, "the cursor cannot move past a taken address");
+        assertEq(deployGate.cursor(NAMESPACE, ID), 0, "the cursor cannot move past a taken address");
 
         // Having done it costs nothing but the signature that undoes it
         bytes32[] memory left = new bytes32[](2);
@@ -1022,7 +1022,7 @@ contract DeployGateTest is Test, CreateXScript {
             assertEq(Target(deployed).value(), i + 3);
         }
 
-        assertEq(deployGate.deployed(NAMESPACE, ID), 2, "the deployment finished after the stall");
+        assertEq(deployGate.cursor(NAMESPACE, ID), 2, "the deployment finished after the stall");
     }
 
     /// @dev Which is a property of the entry, not of the commitment: what sits before the taken address
@@ -1043,13 +1043,13 @@ contract DeployGateTest is Test, CreateXScript {
 
         vm.prank(EXECUTOR);
         assertEq(Target(deployGate.deploy(NAMESPACE, ID, next[0], nextInitCodes[0])).value(), 400);
-        assertEq(deployGate.deployed(NAMESPACE, ID), 1, "the fresh entry goes through");
+        assertEq(deployGate.cursor(NAMESPACE, ID), 1, "the fresh entry goes through");
 
         vm.prank(EXECUTOR);
         vm.expectRevert(IDeployGate.ProxyDeploymentFailed.selector);
         deployGate.deploy(NAMESPACE, ID, next[1], nextInitCodes[1]);
 
-        assertEq(deployGate.deployed(NAMESPACE, ID), 1, "and the sequence stops where the address is taken");
+        assertEq(deployGate.cursor(NAMESPACE, ID), 1, "and the sequence stops where the address is taken");
     }
 
     function testDeployConsumesTheCommitment() public {

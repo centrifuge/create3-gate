@@ -10,6 +10,12 @@ import {IDeployGate} from "./IDeployGate.sol";
 ///         Committing is one transaction whatever the contract count, and an executor gains no privilege
 ///         beyond deploying exactly what was committed.
 ///
+///         What a namespace cannot hand out safely is the committing itself, since a key that commits picks
+///         the addresses. It can delegate it anyway, bounded two ways: what a delegate commits waits out the
+///         namespace's delay before it is deployable, and `clear` empties the namespace — delegations and
+///         commitments alike — in one write. A leaked delegate key is then a window and a single call rather
+///         than a race against a transaction that has already happened.
+///
 /// @dev    One gate serves everyone: it takes no constructor arguments, holds no privilege of its own, and
 ///         holds none over anything it deploys, so it is the same contract at the same address on every
 ///         chain and whoever finds a chain without one deploys it themselves.
@@ -19,21 +25,10 @@ import {IDeployGate} from "./IDeployGate.sol";
 ///         choose, and this contract's code is the whole of its authority.
 contract DeployGate is IDeployGate {
     // Namespaces
-    struct Namespace {
-        uint64 term;
-        uint64 delay;
-    }
-
     mapping(address namespace => Namespace) internal _namespaces;
     mapping(address namespace => mapping(uint64 term => mapping(address who => bool))) internal _isDelegate;
 
     // Commitments
-    struct Commitment {
-        uint64 nonce;
-        uint64 deployed;
-        uint64 deployableAt;
-    }
-
     mapping(address namespace => mapping(bytes32 id => Commitment)) internal _commitments;
     mapping(bytes32 scope => mapping(uint64 nonce => mapping(address who => bool))) internal _executor;
     mapping(bytes32 scope => mapping(uint64 nonce => mapping(bytes32 salt => bytes32 hash))) internal _committed;
@@ -74,7 +69,7 @@ contract DeployGate is IDeployGate {
 
         Commitment storage commitment_ = _commitments[namespace][id];
         current = ++commitment_.nonce;
-        commitment_.deployed = 0;
+        commitment_.cursor = 0;
         commitment_.deployableAt = startsAt;
 
         bytes32 scope = _scopeOf(namespace, currentTerm, id);
@@ -130,11 +125,11 @@ contract DeployGate is IDeployGate {
         uint64 startsAt = commitment_.deployableAt;
         require(block.timestamp >= startsAt, NotYetDeployable(startsAt));
 
-        bytes32 expected = commitment(keccak256(initCode), commitment_.deployed);
+        bytes32 expected = commitment(keccak256(initCode), commitment_.cursor);
         require(_committed[scope][current][salt] == expected, NotCommitted(salt));
 
         delete _committed[scope][current][salt];
-        ++commitment_.deployed;
+        ++commitment_.cursor;
 
         target = Create3.deploy(namespaceSalt(namespace, salt), initCode);
         emit Deploy(namespace, id, currentTerm, current, salt, target);
@@ -160,8 +155,8 @@ contract DeployGate is IDeployGate {
     }
 
     /// @inheritdoc IDeployGate
-    function deployed(address namespace, bytes32 id) external view returns (uint64) {
-        return _commitments[namespace][id].deployed;
+    function cursor(address namespace, bytes32 id) external view returns (uint64) {
+        return _commitments[namespace][id].cursor;
     }
 
     /// @inheritdoc IDeployGate

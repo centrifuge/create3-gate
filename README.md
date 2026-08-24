@@ -64,7 +64,7 @@ A namespace can hold several commitments at once, told apart by an **id** it pic
   Committing nothing revokes it outright. Whatever a new commitment does not mention becomes undeployable, so
   a superseded set cannot be spent afterwards.
 - Committing under a fresh id leaves every other commitment alone. Each id carries its own generation
-  (`nonce`) and its own deployment cursor (`deployed`), so one commitment can be signed while another is still
+  (`nonce`) and its own deployment cursor (`cursor`), so one commitment can be signed while another is still
   being executed.
 - The id scopes permission and never an address. Two commitments naming the same salt point at the same
   contract, and whichever deploys first takes it.

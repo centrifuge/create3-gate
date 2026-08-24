@@ -2,6 +2,21 @@
 pragma solidity >=0.8.4;
 
 interface IDeployGate {
+    /// @dev What a namespace holds beside its commitments: the term everything in it hangs off, and the delay
+    ///      its delegates commit under. One slot, and nothing in it is going anywhere near 2^64
+    struct Namespace {
+        uint64 term;
+        uint64 delay;
+    }
+
+    /// @dev What an id holds: the generation of the commitment standing under it, how far through it the
+    ///      deployment has come, and the moment the whole of it becomes deployable
+    struct Commitment {
+        uint64 nonce;
+        uint64 cursor;
+        uint64 deployableAt;
+    }
+
     event SetDelegate(address indexed namespace, address indexed delegatee, bool isValid);
     event SetDelay(address indexed namespace, uint64 seconds_);
     event Clear(address indexed namespace, uint256 term);
@@ -131,9 +146,9 @@ interface IDeployGate {
     ///         nonce together: the nonce alone repeats nothing, but says nothing about which term holds it
     function nonce(address namespace, bytes32 id) external view returns (uint64);
 
-    /// @notice How many contracts of a commitment have been deployed, and so which comes next. One cursor per
-    ///         commitment, which is what lets several of them be in flight without interleaving
-    function deployed(address namespace, bytes32 id) external view returns (uint64);
+    /// @notice How many contracts of a commitment have been deployed, and so which comes next. One of these
+    ///         per commitment, which is what lets several of them be in flight without interleaving
+    function cursor(address namespace, bytes32 id) external view returns (uint64);
 
     /// @notice Whether `who` may commit in `namespace` on its behalf, in the term the namespace is in now
     function isDelegate(address namespace, address who) external view returns (bool);
