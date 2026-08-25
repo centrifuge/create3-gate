@@ -13,6 +13,11 @@ The gate splits a deployment into two phases, signed by two different keys:
 The cold key never sends a deployment. The hot key can never deploy anything the cold key did not commit to,
 at any address other than the committed one, or in any other order. So it can live in CI.
 
+The bigger the deployment, the more this saves, since committing is one transaction whatever the contract count.
+Centrifuge Protocol, the deployment it was built for, is 56 contracts. On eleven chains that is 616 deployments,
+signed by a hot key, behind 11 cold signatures. Sign 616 of them from a cold wallet instead and the deployment
+gets done with a hot key anyway.
+
 ## Use it
 
 ```solidity
@@ -82,8 +87,8 @@ addressOf(namespace, salt)
 ```
 
 Nothing chain-specific goes into the derivation, so one namespace is the same set of addresses on every chain,
-and `addressOf` answers before anything is deployed. That is what lets a constructor take the address of a
-contract that does not exist yet, on a chain where nothing has been deployed at all.
+and `addressOf` answers before anything is deployed. A constructor can take the address of a contract that has
+not been deployed yet, on a chain where nothing has been deployed at all.
 
 Addresses derive from the gate, the account the namespace is named after, and the salt. Not from the init code,
 so a patch release lands at the same address; not from the commitment id, so where a contract goes never
@@ -93,20 +98,20 @@ free to change.
 Two namespaces can neither collide nor block each other, which is why one gate is safe for everyone to share.
 The gate has no owner, no admin and no privilege over anything it deploys.
 
-## Why the hot key needs no trust
+## What the hot key can do
 
-A commitment pins three things per contract, and together they leave an executor no freedom:
+A commitment pins three things per contract, and together they leave the executor no choices:
 
 - the salt, so it cannot move a contract to an address of its choosing and strand the intended one,
 - the init code hash, so it cannot deploy code of its own at an approved address,
 - the position in the order, so it cannot deploy a contract before a dependency it reads in its
   constructor exists.
 
-Anything phase-dependent in a constructor argument (`msg.sender` is the classic) makes the two phases
-disagree, and the deploy aborts with `NotCommitted` rather than deploying something else.
+A constructor argument that differs between the two phases (`msg.sender` is the usual one) changes the init
+code hash, and the deploy aborts with `NotCommitted` instead of deploying something else.
 
-Naming several executors therefore costs no more trust than naming one. Rotating them is a re-commit: they
-belong to the commitment rather than sitting beside it.
+Naming several executors costs no more than naming one. Executors belong to the commitment, so rotating them
+means committing again without the old one.
 
 ## Committing again, and delegating
 
@@ -133,10 +138,9 @@ The gate is at `0xBA08f1fD092031C81296fC59f6539b21b38f2249` on every chain, as p
 `script/DeployGate.d.sol`, and anyone can put it there. It takes no constructor arguments and grants its
 deployer nothing, so there is nothing to configure and no order to get right.
 
-It is deployed through CreateX's `deployCreate2`, not `deployCreate3`, which is what makes that safe: a CREATE2
-address covers the init code, so the only contract that fits the gate's address is the gate, and this
-contract's code is the whole of its authority. Changing `DeployGate.sol`, or the settings it is compiled with,
-produces a different gate at a different address, and every address derived from it moves.
+It is deployed through CreateX's `deployCreate2` rather than `deployCreate3`. A CREATE2 address covers the init
+code, so the only contract that fits the gate's address is the gate. Changing `DeployGate.sol`, or the settings it is compiled with, produces a different gate at a different
+address, and every address derived from it moves.
 
 ## Reference
 
@@ -152,16 +156,13 @@ script/DeployGateScript.sol brings the gate up in a forge script or test, as Cre
 
 ## Why it exists
 
-Deploying from a single key means that key decides, one transaction at a time, what code lands at which
-address, so nothing about the deployment can be reviewed up front: reviewing means watching it happen. And the
-key that signs it is the key every address derives from, so it cannot be a cold one, and two people cannot
-share it without both being able to deploy whatever they like.
+Deploying from a single key means the key decides, one transaction at a time, what code lands where. Nothing is
+agreed up front, so reviewing the deployment means watching it happen. That key is also the one every address
+derives from, so it cannot be cold, and two people cannot share it without both being able to deploy anything
+they like.
 
-The other half is arithmetic. The deployment this was built for is 56 contracts across eleven mainnets: 616
-transactions, each signed by the account every address derives from. A ceremony nobody can get through is one
-that ends up being done by a hot key instead, which is how that account becomes the least protected one in the
-deployment. Authorising wants a cold key signing once; sending wants a warm key signing hundreds of times. One
-account cannot be both, so the gate splits them.
+Authorising a deployment suits a cold key signing once. Sending it needs a key signing hundreds of times. The
+gate lets one account do the first and another do the second.
 
 ## Development
 
@@ -172,5 +173,4 @@ forge fmt
 ```
 
 `foundry.toml` pins the compiler settings the gate's bytecode was derived from. Changing them moves the
-constants in `script/DeployGate.d.sol`, and with them every address the gate would ever produce, so it is a
-decision rather than a chore.
+constants in `script/DeployGate.d.sol`, and with them every address the gate would ever produce.
