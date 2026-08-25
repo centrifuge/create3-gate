@@ -5,10 +5,15 @@ import {Create3} from "./Create3.sol";
 import {IDeployGate} from "./IDeployGate.sol";
 
 /// @title  DeployGate
-/// @notice Deploys a set of contracts through CREATE3 in two steps: a validator commits what may be
-///         deployed, where, in what order and by whom, and any of the executors it named then deploys it.
-///         Committing is one transaction whatever the contract count, and an executor gains no privilege
-///         beyond deploying exactly what was committed.
+/// @notice Deploys a set of contracts through CREATE3 in two steps. First an account commits what may be
+///         deployed in its namespace: which contracts, under which salts, in what order, and who may send
+///         them. Then any of the executors it named deploys them, one at a time and nothing else.
+///         Committing is one transaction whatever the contract count.
+///
+///         A namespace can let a delegate commit on its behalf, which is how a cold key keeps the addresses
+///         while a warmer one signs. Two things bound what that costs if the delegate key is lost: what a
+///         delegate commits is not deployable until the namespace's delay has passed, and `clear` empties
+///         the namespace in one call, delegations and commitments alike.
 ///
 /// @dev    One gate serves everyone: it takes no constructor arguments, holds no privilege of its own, and
 ///         holds none over anything it deploys, so it is the same contract at the same address on every
@@ -18,32 +23,58 @@ import {IDeployGate} from "./IDeployGate.sol";
 ///         and not through CREATE3, where it does not: a CREATE3 gate address would be code anyone could
 ///         choose, and this contract's code is the whole of its authority.
 contract DeployGate is IDeployGate {
-    mapping(address validator => uint256) public term;
-    mapping(address validator => mapping(bytes32 id => uint256)) public nonce;
-    mapping(address validator => mapping(bytes32 id => uint256)) public deployed;
-    mapping(address validator => mapping(address who => bool)) public isDelegate;
-    mapping(bytes32 scope => mapping(uint256 nonce => mapping(address who => bool))) internal _executor;
-    mapping(bytes32 scope => mapping(uint256 nonce => mapping(bytes32 salt => bytes32 hash))) internal _validated;
+    // Namespaces
+    mapping(address namespace => Namespace) public namespaces;
+    mapping(address namespace => mapping(uint64 term => mapping(address who => bool))) internal _isDelegate;
+
+    // Commitments
+    mapping(address namespace => mapping(bytes32 id => Commitment)) public commitments;
+    mapping(bytes32 scope => mapping(uint64 nonce => mapping(address who => bool))) internal _executor;
+    mapping(bytes32 scope => mapping(uint64 nonce => mapping(bytes32 salt => bytes32 hash))) internal _committed;
 
     //----------------------------------------------------------------------------------------------
-    // Validation
+    // Committing
     //----------------------------------------------------------------------------------------------
 
     /// @inheritdoc IDeployGate
-    function validate(
-        address validator,
+    function commit(
+        address namespace,
         bytes32 id,
         bytes32[] calldata salts,
         bytes32[] calldata initCodeHashes,
         address[] calldata executors
     ) external {
-        require(msg.sender == validator || isDelegate[validator][msg.sender], NotValidator());
+        require(msg.sender == namespace || isDelegate(namespace, msg.sender), NotAuthorized());
         require(salts.length == initCodeHashes.length, LengthMismatch());
 
-        bytes32 scope = scopeOf(validator, id);
-        uint256 current = ++nonce[validator][id];
-        deployed[validator][id] = 0;
+        (uint64 current, uint64 startsAt, uint64 currentTerm) = _open(namespace, id, salts, initCodeHashes, executors);
 
+        emit Commit(namespace, id, current, currentTerm, startsAt, salts, initCodeHashes, executors);
+    }
+
+    function _open(
+        address namespace,
+        bytes32 id,
+        bytes32[] calldata salts,
+        bytes32[] calldata initCodeHashes,
+        address[] calldata executors
+    ) internal returns (uint64 current, uint64 startsAt, uint64 currentTerm) {
+        currentTerm = namespaces[namespace].term;
+
+        // A namespace's own commitment is deployable at once and a delegate's waits, which is the window in
+        // which one nobody meant to make can still be cleared
+        if (msg.sender != namespace) {
+            uint64 delay_ = namespaces[namespace].delay;
+            if (delay_ != 0) startsAt = uint64(block.timestamp) + delay_;
+        }
+
+        Commitment storage commitment_ = commitments[namespace][id];
+        current = ++commitment_.nonce;
+        commitment_.term = currentTerm;
+        commitment_.cursor = 0;
+        commitment_.deployableAt = startsAt;
+
+        bytes32 scope = _scopeOf(namespace, currentTerm, id);
         for (uint256 i; i < executors.length; i++) {
             _executor[scope][current][executors[i]] = true;
         }
@@ -51,31 +82,28 @@ contract DeployGate is IDeployGate {
         for (uint256 i; i < salts.length; i++) {
             // A repeat would leave one entry behind two positions in the log, so what it says would stop
             // being what is enforceable, and only one of the two would be reachable
-            require(_validated[scope][current][salts[i]] == 0, DuplicateSalt(salts[i]));
+            require(_committed[scope][current][salts[i]] == 0, DuplicateSalt(salts[i]));
 
-            _validated[scope][current][salts[i]] = commitment(initCodeHashes[i], i);
+            _committed[scope][current][salts[i]] = commitment(initCodeHashes[i], i);
         }
-
-        // One event for the whole commitment, so that it can be read back from a single log. It carries the
-        // generation it opens, term and nonce together, which is what everything it grants is keyed by:
-        // without them a reader has to count the commitments that came before to know which of them the gate
-        // still enforces, and cannot tell a commitment a revocation has since emptied from a live one
-        emit Validate(validator, id, current, term[validator], salts, initCodeHashes, executors);
     }
 
     /// @inheritdoc IDeployGate
     function setDelegate(address delegatee, bool isValid) external {
-        isDelegate[msg.sender][delegatee] = isValid;
+        _isDelegate[msg.sender][namespaces[msg.sender].term][delegatee] = isValid;
         emit SetDelegate(msg.sender, delegatee, isValid);
     }
 
     /// @inheritdoc IDeployGate
-    function revokeAll() external {
-        // Everything a commitment grants hangs off the term it was made in, so ending the term is the whole
-        // of it: one write, whatever the gate holds and whoever put it there, and nothing to enumerate first
-        uint256 current = ++term[msg.sender];
+    function setDelay(uint64 seconds_) external {
+        namespaces[msg.sender].delay = seconds_;
+        emit SetDelay(msg.sender, seconds_);
+    }
 
-        emit RevokeAll(msg.sender, current);
+    /// @inheritdoc IDeployGate
+    function clear() external {
+        uint64 current = ++namespaces[msg.sender].term;
+        emit Clear(msg.sender, current);
     }
 
     //----------------------------------------------------------------------------------------------
@@ -83,22 +111,27 @@ contract DeployGate is IDeployGate {
     //----------------------------------------------------------------------------------------------
 
     /// @inheritdoc IDeployGate
-    function deploy(address validator, bytes32 id, bytes32 salt, bytes calldata initCode)
+    function deploy(address namespace, bytes32 id, bytes32 salt, bytes calldata initCode)
         external
         returns (address target)
     {
-        bytes32 scope = scopeOf(validator, id);
-        uint256 current = nonce[validator][id];
+        Commitment storage commitment_ = commitments[namespace][id];
+        uint64 currentTerm = namespaces[namespace].term;
+        bytes32 scope = _scopeOf(namespace, currentTerm, id);
+        uint64 current = commitment_.nonce;
         require(_executor[scope][current][msg.sender], NotExecutor());
 
-        bytes32 expected = commitment(keccak256(initCode), deployed[validator][id]);
-        require(_validated[scope][current][salt] == expected, NotValidated(salt));
+        uint64 startsAt = commitment_.deployableAt;
+        require(block.timestamp >= startsAt, NotYetDeployable(startsAt));
 
-        delete _validated[scope][current][salt];
-        ++deployed[validator][id];
+        bytes32 expected = commitment(keccak256(initCode), commitment_.cursor);
+        require(_committed[scope][current][salt] == expected, NotCommitted(salt));
 
-        target = Create3.deploy(namespaceSalt(validator, salt), initCode);
-        emit Deploy(validator, id, term[validator], current, salt, target);
+        delete _committed[scope][current][salt];
+        ++commitment_.cursor;
+
+        target = Create3.deploy(namespaceSalt(namespace, salt), initCode);
+        emit Deploy(namespace, id, currentTerm, current, salt, target);
     }
 
     //----------------------------------------------------------------------------------------------
@@ -106,18 +139,22 @@ contract DeployGate is IDeployGate {
     //----------------------------------------------------------------------------------------------
 
     /// @inheritdoc IDeployGate
-    function isExecutor(address validator, bytes32 id, address who) external view returns (bool) {
-        return _executor[scopeOf(validator, id)][nonce[validator][id]][who];
+    function isDelegate(address namespace, address who) public view returns (bool) {
+        return _isDelegate[namespace][namespaces[namespace].term][who];
     }
 
     /// @inheritdoc IDeployGate
-    function validated(address validator, bytes32 id, bytes32 salt) external view returns (bytes32) {
-        return _validated[scopeOf(validator, id)][nonce[validator][id]][salt];
+    function isExecutor(address namespace, bytes32 id, address who) external view returns (bool) {
+        return _executor[_scopeOf(namespace, namespaces[namespace].term, id)][commitments[namespace][id].nonce][who];
     }
 
     /// @inheritdoc IDeployGate
-    function scopeOf(address validator, bytes32 id) public view returns (bytes32) {
-        return keccak256(abi.encode(validator, term[validator], id));
+    function committed(address namespace, bytes32 id, bytes32 salt) external view returns (bytes32) {
+        return _committed[_scopeOf(namespace, namespaces[namespace].term, id)][commitments[namespace][id].nonce][salt];
+    }
+
+    function _scopeOf(address namespace, uint64 term_, bytes32 id) internal pure returns (bytes32) {
+        return keccak256(abi.encode(namespace, term_, id));
     }
 
     /// @inheritdoc IDeployGate
@@ -126,12 +163,12 @@ contract DeployGate is IDeployGate {
     }
 
     /// @inheritdoc IDeployGate
-    function namespaceSalt(address validator, bytes32 salt) public pure returns (bytes32) {
-        return keccak256(abi.encode(validator, salt));
+    function namespaceSalt(address namespace, bytes32 salt) public pure returns (bytes32) {
+        return keccak256(abi.encode(namespace, salt));
     }
 
     /// @inheritdoc IDeployGate
-    function addressOf(address validator, bytes32 salt) external view returns (address) {
-        return Create3.addressOf(namespaceSalt(validator, salt), address(this));
+    function addressOf(address namespace, bytes32 salt) external view returns (address) {
+        return Create3.addressOf(namespaceSalt(namespace, salt), address(this));
     }
 }
