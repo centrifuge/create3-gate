@@ -82,7 +82,7 @@ contract DeployGateScriptTest is Test, DeployGateScript {
         hashes[0] = keccak256(initCode);
         executors[0] = EXECUTOR;
 
-        gate.validate(address(this), ID, salts, hashes, executors);
+        gate.commit(address(this), ID, salts, hashes, executors);
 
         address predicted = gate.addressOf(address(this), salts[0]);
 
