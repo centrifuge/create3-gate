@@ -13,10 +13,11 @@ The gate splits a deployment into two phases, signed by two different keys:
 The cold key never sends a deployment. The hot key can never deploy anything the cold key did not commit to,
 at any address other than the committed one, or in any other order. So it can live in CI.
 
-The bigger the deployment, the more this saves, since committing is one transaction whatever the contract count.
-Centrifuge Protocol, the deployment it was built for, is 56 contracts. On eleven chains that is 616 deployments,
-signed by a hot key, behind 11 cold signatures. Sign 616 of them from a cold wallet instead and the deployment
-gets done with a hot key anyway.
+The bigger the deployment, the more this matters, since a commitment is one transaction whatever the contract
+count. Centrifuge Protocol, the deployment it was built for, is 56 contracts across eleven chains, so 616
+deployments in total. Deployed the usual way, all 616 are signed by the key every address derives from. Through
+the gate, that key signs 11 commitments and nothing else, and the 616 sends come from a key that cannot change
+what they deploy.
 
 ## Use it
 
