@@ -1,13 +1,13 @@
 # create3-gate
 
-Deploy a set of contracts to the **same addresses on every chain**, with a hot key that can only deploy exactly
+Deploy a set of contracts to the same addresses on every chain, with a hot key that can only deploy exactly
 what a cold key approved.
 
-The gate splits a deployment into two phases signed by **two different keys**:
+The gate splits a deployment into two phases, signed by two different keys:
 
 | Phase | Key | Signs | What it can do |
 |---|---|---|---|
-| `commit` | the cold one, which every address derives from | **once per chain**, whatever the contract count | says what may be deployed, in what order, and by whom |
+| `commit` | the cold one, which every address derives from | once per chain, whatever the contract count | says what may be deployed, in what order, and by whom |
 | `deploy` | a hot one, named in the commitment | once per contract | deploys exactly that, and nothing else |
 
 The cold key never sends a deployment. The hot key can never deploy anything the cold key did not commit to,
@@ -97,9 +97,9 @@ The gate has no owner, no admin and no privilege over anything it deploys.
 
 A commitment pins three things per contract, and together they leave an executor no freedom:
 
-- **the salt**, so it cannot move a contract to an address of its choosing and strand the intended one,
-- **the init code hash**, so it cannot deploy code of its own at an approved address,
-- **the position in the order**, so it cannot deploy a contract before a dependency it reads in its
+- the salt, so it cannot move a contract to an address of its choosing and strand the intended one,
+- the init code hash, so it cannot deploy code of its own at an approved address,
+- the position in the order, so it cannot deploy a contract before a dependency it reads in its
   constructor exists.
 
 Anything phase-dependent in a constructor argument (`msg.sender` is the classic) makes the two phases
@@ -110,7 +110,7 @@ belong to the commitment rather than sitting beside it.
 
 ## Committing again, and delegating
 
-- Committing under an id that already holds a commitment **replaces it whole**. Whatever the new one does not
+- Committing under an id that already holds a commitment replaces it whole. Whatever the new one does not
   mention stops being deployable, and committing nothing revokes it outright.
 - Committing under a fresh id leaves every other commitment alone, so one deployment can be signed while
   another is still being executed.
@@ -130,7 +130,7 @@ Vendoring is enough because nothing outside this repository compiles `DeployGate
 and the address is fixed on chain, so no compiler settings have to match.
 
 The gate is at `0xBA08f1fD092031C81296fC59f6539b21b38f2249` on every chain, as pinned in
-`script/DeployGate.d.sol`, and **anyone** can put it there. It takes no constructor arguments and grants its
+`script/DeployGate.d.sol`, and anyone can put it there. It takes no constructor arguments and grants its
 deployer nothing, so there is nothing to configure and no order to get right.
 
 It is deployed through CreateX's `deployCreate2`, not `deployCreate3`, which is what makes that safe: a CREATE2
