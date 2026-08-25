@@ -18,9 +18,6 @@ same init code, at the same addresses, in the same order, or it reverts.
 The cold key never sends a deployment, and the hot key can live in CI. Addresses are the same on every chain,
 and `addressOf(namespace, salt)` answers before anything has been deployed.
 
-Centrifuge Protocol, the deployment it was built for, is 56 contracts on eleven chains: 616 deployments behind
-eleven cold signatures.
-
 ## Use it
 
 ```solidity
