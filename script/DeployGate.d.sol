@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: MIT
 pragma solidity >=0.5.0;
 
 /// @dev Zero throughout: no sender in the first 20 bytes, no redeploy protection in the 21st, which is the

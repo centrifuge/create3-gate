@@ -2,14 +2,13 @@
 
 Deterministic CREATE3 deployments across chains, authorised by one key and sent by another.
 
-Deploying Centrifuge Protocol takes 56 contracts on eleven chains: 616 transactions, each signed by the account
-every deployed address derives from. That account cannot be a cold one if it has to sign 616 times, and it
-cannot be shared without everyone holding it being able to deploy whatever they like.
+A multi-chain deployment is signed transaction by transaction by the account every deployed address derives
+from. Fifty contracts across ten chains is five hundred transactions from that one account, which is more than
+a cold key can realistically sign, and sharing it means everyone holding it can deploy whatever they like.
 
-The gate splits the deployment in two. A cold key commits what may be deployed, one transaction per chain
-independent of the contract count, so eleven signatures rather than 616. A hot key then sends all 616
-deployments, and can produce nothing but what was committed: the same init code, at the same addresses, in the
-same order, or it reverts.
+The gate splits that in two. A cold key commits what may be deployed, one transaction per chain independent of
+the contract count. A hot key then sends every deployment, and can produce nothing but what was committed: the
+same init code, at the same addresses, in the same order, or it reverts.
 
 | Phase | Key | Signs | What it can do |
 |---|---|---|---|
@@ -18,6 +17,9 @@ same order, or it reverts.
 
 The cold key never sends a deployment, and the hot key can live in CI. Addresses are the same on every chain,
 and `addressOf(namespace, salt)` answers before anything has been deployed.
+
+Centrifuge Protocol, the deployment it was built for, is 56 contracts on eleven chains: 616 deployments behind
+eleven cold signatures.
 
 ## Use it
 
@@ -133,5 +135,4 @@ moves.
 
 ## License
 
-Business Source License 1.1, as declared in every source file. It converts to GPL v3.0 or later five years
-after publication, and the additional use grants are listed at [license.centrifuge.io](https://license.centrifuge.io).
+MIT, see [LICENSE](LICENSE).

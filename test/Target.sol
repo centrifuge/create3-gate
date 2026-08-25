@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
 /// @dev What the tests deploy. Records its creator as well as its argument, since a CREATE3 payload is

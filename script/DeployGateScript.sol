@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.4;
 
 import {DEPLOY_GATE_SALT, DEPLOY_GATE_ADDRESS, DEPLOY_GATE_BYTECODE, DEPLOY_GATE_EXTCODEHASH} from "./DeployGate.d.sol";
