@@ -1,43 +1,36 @@
 # create3-gate
 
-Deploy a set of contracts to the same addresses on every chain, with a hot key that can only deploy exactly
-what a cold key approved.
+Deterministic CREATE3 deployments across chains, authorised by one key and sent by another.
 
-The gate splits a deployment into two phases, signed by two different keys:
+Deploying Centrifuge Protocol takes 56 contracts on eleven chains: 616 transactions, each signed by the account
+every deployed address derives from. That account cannot be a cold one if it has to sign 616 times, and it
+cannot be shared without everyone holding it being able to deploy whatever they like.
+
+The gate splits the deployment in two. A cold key commits what may be deployed, one transaction per chain
+independent of the contract count, so eleven signatures rather than 616. A hot key then sends all 616
+deployments, and can produce nothing but what was committed: the same init code, at the same addresses, in the
+same order, or it reverts.
 
 | Phase | Key | Signs | What it can do |
 |---|---|---|---|
-| `commit` | the cold one, which every address derives from | once per chain, whatever the contract count | says what may be deployed, in what order, and by whom |
+| `commit` | the cold one, which every address derives from | once per chain, independent of the contract count | says what may be deployed, in what order, and by whom |
 | `deploy` | a hot one, named in the commitment | once per contract | deploys exactly that, and nothing else |
 
-The cold key never sends a deployment. The hot key can never deploy anything the cold key did not commit to,
-at any address other than the committed one, or in any other order. So it can live in CI.
-
-The bigger the deployment, the more this matters, since a commitment is one transaction whatever the contract
-count. Centrifuge Protocol, the deployment it was built for, is 56 contracts across eleven chains, so 616
-deployments in total. Deployed the usual way, all 616 are signed by the key every address derives from. Through
-the gate, that key signs 11 commitments and nothing else, and the 616 sends come from a key that cannot change
-what they deploy.
+The cold key never sends a deployment, and the hot key can live in CI. Addresses are the same on every chain,
+and `addressOf(namespace, salt)` answers before anything has been deployed.
 
 ## Use it
 
 ```solidity
-import {DeployGateScript} from "create3-gate/script/DeployGateScript.sol";
-import {DEPLOY_GATE_ADDRESS} from "create3-gate/script/DeployGate.d.sol";
-import {IDeployGate} from "create3-gate/src/IDeployGate.sol";
-
 contract MyDeployer is DeployGateScript {
     IDeployGate gate = IDeployGate(DEPLOY_GATE_ADDRESS);
 
     address constant NAMESPACE = 0x...; // the cold account, which every address derives from
-    address constant EXECUTOR = 0x...; // the hot key that sends the deployments
-    bytes32 constant ID = "v1";
+    bytes32 constant ID = "v1";         // names this commitment, so several can be in flight
 
-    // Both phases build the deployment here, so they cannot drift apart
+    // Both phases build the deployment here, so the two cannot drift apart. A constructor argument can be
+    // the address of a contract that has not been deployed yet, on this chain or on any other
     function contracts() internal view returns (bytes32[] memory salts, bytes[] memory initCodes) {
-        salts = new bytes32[](2);
-        initCodes = new bytes[](2);
-
         salts[0] = "Root";
         initCodes[0] = type(Root).creationCode;
 
@@ -49,17 +42,9 @@ contract MyDeployer is DeployGateScript {
     function commit() public {
         (bytes32[] memory salts, bytes[] memory initCodes) = contracts();
 
-        bytes32[] memory hashes = new bytes32[](initCodes.length);
-        for (uint256 i; i < initCodes.length; i++) {
-            hashes[i] = keccak256(initCodes[i]);
-        }
-
-        address[] memory executors = new address[](1);
-        executors[0] = EXECUTOR;
-
         vm.startBroadcast();
         setUpDeployGate();
-        gate.commit(NAMESPACE, ID, salts, hashes, executors);
+        gate.commit(NAMESPACE, ID, salts, hashesOf(initCodes), executors);
         vm.stopBroadcast();
     }
 
@@ -104,7 +89,7 @@ Nothing chain-specific enters the derivation, so a namespace is the same set of 
 address, and not the commitment id or the sender, so neither the approval nor the hot key affects where a
 contract goes. Two namespaces can neither collide nor block each other, so one gate serves everyone.
 
-A commitment pins three things per contract, and together they leave the executor no choices:
+A commitment pins three things per contract, and an executor can change none of them:
 
 - the salt, so it cannot move a contract to an address of its choosing and strand the intended one,
 - the init code hash, so it cannot deploy code of its own at an approved address,
@@ -121,12 +106,12 @@ Each commitment sits under an id the caller picks:
 - Committing under a fresh id leaves every other commitment alone, so one deployment can be signed while
   another is still being executed.
 
-Two calls cover the case where a Safe signing eleven commitments is too slow. `setDelegate(delegatee, true)`
-lets a second key run the commit phase, and since that key can commit anything the cold one could, `setDelay`
-bounds it: what a delegate commits is not deployable until the delay has passed, which is the window in which a
-commitment nobody meant to make can still be stopped. Set the delay before granting. `clear()` then empties the
-namespace, every delegation and every commitment under any id, in one write, leaving the salts unspent so what
-was going to be deployed still can be. Both are per chain, like every other call.
+`setDelegate(delegatee, true)` lets a second key run the commit phase, for when signing every commitment from
+the cold account is impractical. A delegate can commit anything the cold key could, so `setDelay` bounds it:
+what a delegate commits is not deployable until the delay has passed, which is the window in which a commitment
+nobody meant to make can still be stopped. Set the delay before granting. `clear()` empties the namespace,
+every delegation and every commitment under any id, in one write, leaving the salts unspent so what was going
+to be deployed still can be. Both are per chain, like every other call.
 
 Every call is documented in full in [`src/IDeployGate.sol`](src/IDeployGate.sol).
 
