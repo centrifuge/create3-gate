@@ -130,3 +130,8 @@ It is deployed through CreateX's `deployCreate2` rather than `deployCreate3`. A 
 code, so the only contract that fits the gate's address is the gate. Changing `DeployGate.sol`, or the compiler
 settings in `foundry.toml`, produces a different gate at a different address, and every address derived from it
 moves.
+
+## License
+
+Business Source License 1.1, as declared in every source file. It converts to GPL v3.0 or later five years
+after publication, and the additional use grants are listed at [license.centrifuge.io](https://license.centrifuge.io).
