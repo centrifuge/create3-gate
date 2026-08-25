@@ -13,7 +13,9 @@ import {IDeployGate} from "./IDeployGate.sol";
 ///         A namespace can let a delegate commit on its behalf, which is how a cold key keeps the addresses
 ///         while a warmer one signs. Two things bound what that costs if the delegate key is lost: what a
 ///         delegate commits is not deployable until the namespace's delay has passed, and `clear` empties
-///         the namespace in one call, delegations and commitments alike.
+///         the namespace in one call, delegations and commitments alike. A delegate can clear too, so
+///         shutting a leaked key out does not wait on the cold one. Clearing revokes every delegation, the
+///         caller's own included.
 ///
 /// @dev    One gate serves everyone: it takes no constructor arguments, holds no privilege of its own, and
 ///         holds none over anything it deploys, so it is the same contract at the same address on every
@@ -32,6 +34,11 @@ contract DeployGate is IDeployGate {
     mapping(bytes32 scope => mapping(uint64 nonce => mapping(address who => bool))) internal _executor;
     mapping(bytes32 scope => mapping(uint64 nonce => mapping(bytes32 salt => bytes32 hash))) internal _committed;
 
+    modifier onlyNamespaceOrDelegate(address namespace) {
+        require(msg.sender == namespace || isDelegate(namespace, msg.sender), NotAuthorized());
+        _;
+    }
+
     //----------------------------------------------------------------------------------------------
     // Committing
     //----------------------------------------------------------------------------------------------
@@ -43,8 +50,7 @@ contract DeployGate is IDeployGate {
         bytes32[] calldata salts,
         bytes32[] calldata initCodeHashes,
         address[] calldata executors
-    ) external {
-        require(msg.sender == namespace || isDelegate(namespace, msg.sender), NotAuthorized());
+    ) external onlyNamespaceOrDelegate(namespace) {
         require(salts.length == initCodeHashes.length, LengthMismatch());
 
         (uint64 current, uint64 startsAt, uint64 currentTerm) = _open(namespace, id, salts, initCodeHashes, executors);
@@ -101,9 +107,9 @@ contract DeployGate is IDeployGate {
     }
 
     /// @inheritdoc IDeployGate
-    function clear() external {
-        uint64 current = ++namespaces[msg.sender].term;
-        emit Clear(msg.sender, current);
+    function clear(address namespace) external onlyNamespaceOrDelegate(namespace) {
+        uint64 current = ++namespaces[namespace].term;
+        emit Clear(namespace, current);
     }
 
     //----------------------------------------------------------------------------------------------

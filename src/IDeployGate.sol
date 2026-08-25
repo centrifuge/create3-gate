@@ -89,7 +89,8 @@ interface IDeployGate {
     ///         A delegate is trusted while it holds the delegation: what it commits is committed, and
     ///         withdrawing the delegation reaches only what it would commit next, leaving what it already
     ///         committed deployable. `setDelay` is what bounds that trust, and `clear` is what withdraws
-    ///         every delegation at once, along with everything they committed.
+    ///         every delegation at once, along with everything they committed. The delegates can make that
+    ///         call too, or acting inside the delay would need the cold key.
     ///
     ///         Set the delay before granting the delegation, not after. A commitment takes the delay the
     ///         namespace had at the moment it was made, so a delegate granted while the delay is zero can
@@ -112,25 +113,33 @@ interface IDeployGate {
     ///         Set it before granting a delegation rather than after, or the first thing that delegation
     ///         commits is deployable at once.
     ///
-    ///         Pick it against how long the account behind the namespace takes to sign a `clear` on every
-    ///         chain it has a namespace on, since a term is per chain and so is the containment, and against
-    ///         a monitor that is actually watching `Commit` events. A window nobody watches or can act
-    ///         inside buys nothing. There is no cap: a delay large enough to overflow the timestamp makes
-    ///         every delegate commitment revert, and the useful range is hours.
+    ///         Pick it against how long whoever can `clear`, the namespace or any of its delegates, takes to
+    ///         sign one on every chain it has a namespace on, since a term is per chain and so is the
+    ///         containment, and against a monitor that is actually watching `Commit` events. A window nobody
+    ///         watches or can act inside buys nothing. There is no cap: a delay large enough to overflow the
+    ///         timestamp makes every delegate commitment revert, and the useful range is hours.
     function setDelay(uint64 seconds_) external;
 
-    /// @notice Empties the caller's namespace: every delegation it granted, and every commitment made in it
-    ///         by anyone under any id, in one write.
+    /// @notice Empties `namespace`: every delegation it granted, and every commitment made in it by anyone
+    ///         under any id, in one write. The account the namespace is named after, or one of its delegates.
     /// @dev    Nothing has to be enumerated first, which is the point: a delegate picks its own ids, so after
     ///         a leaked key the ids to replace are not the ids anyone knows to look for.
+    ///
+    ///         The delegates reach it because the delay's window is otherwise the cold key's to act in, on
+    ///         every chain, before it closes. It adds nothing to what a delegate can do already: committing
+    ///         under an id replaces what stands there, so a delegate can cancel whatever it can name, and
+    ///         this reaches the ids it cannot. Nothing here deploys or spends an address.
+    ///
+    ///         A delegate clearing revokes itself along with every other delegation, so a leaked key gets one
+    ///         clearance and no second one, and the honest delegations are granted again by the namespace
+    ///         afterwards with nothing left pending to race. The delay is not a delegation and survives, so
+    ///         what is granted again still commits under it and a clearance is no way out of the window.
     ///
     ///         Addresses are untouched. The salts stay unspent, so what was going to be deployed still can
     ///         be, and anything already deployed stands. Committing again works as it did, in the term this
     ///         opens, and the generation of an id keeps counting across it, so no two commitments under one
     ///         id are ever logged as the same one.
-    ///
-    ///         Always the caller's own namespace, like `setDelegate` and `setDelay`.
-    function clear() external;
+    function clear(address namespace) external;
 
     //----------------------------------------------------------------------------------------------
     // Deployment
