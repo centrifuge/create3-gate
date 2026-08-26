@@ -76,7 +76,7 @@ contract Create3Test is Test {
         bytes32 salt = keccak256("c");
         deployer.deploy(salt, initCodeFor(1));
 
-        vm.expectRevert(IDeployGate.ProxyDeploymentFailed.selector);
+        vm.expectRevert(IDeployGate.SaltAlreadyDeployed.selector);
         deployer.deploy(salt, initCodeFor(1));
     }
 

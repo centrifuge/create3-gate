@@ -817,7 +817,7 @@ contract DeployGateTest is Test, CreateXScript {
 
         // Whichever deploys first takes it, and the second finds the proxy already there
         vm.prank(EXECUTOR);
-        vm.expectRevert(IDeployGate.ProxyDeploymentFailed.selector);
+        vm.expectRevert(IDeployGate.SaltAlreadyDeployed.selector);
         deployGate.deploy(NAMESPACE, OTHER_ID, salts[0], initCodes[0]);
     }
 
@@ -1119,7 +1119,7 @@ contract DeployGateTest is Test, CreateXScript {
 
         // Whose address is taken, so the CREATE3 proxy is what stops it rather than the gate
         vm.prank(EXECUTOR);
-        vm.expectRevert(IDeployGate.ProxyDeploymentFailed.selector);
+        vm.expectRevert(IDeployGate.SaltAlreadyDeployed.selector);
         deployGate.deploy(NAMESPACE, ID, salts[0], initCodes[0]);
 
         // And nothing behind it is reachable, because position is part of what was committed
@@ -1174,7 +1174,7 @@ contract DeployGateTest is Test, CreateXScript {
         assertEq(_cursor(NAMESPACE, ID), 1, "the fresh entry goes through");
 
         vm.prank(EXECUTOR);
-        vm.expectRevert(IDeployGate.ProxyDeploymentFailed.selector);
+        vm.expectRevert(IDeployGate.SaltAlreadyDeployed.selector);
         deployGate.deploy(NAMESPACE, ID, next[1], nextInitCodes[1]);
 
         assertEq(_cursor(NAMESPACE, ID), 1, "and the sequence stops where the address is taken");

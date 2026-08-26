@@ -49,8 +49,9 @@ interface IDeployGate {
     error DuplicateSalt(bytes32 salt);
     /// @dev The delay the commitment was made under has not passed yet
     error NotYetDeployable(uint64 deployableAt);
-    /// @dev The salt is already spent: something stands at the address it names
-    error ProxyDeploymentFailed();
+    /// @dev The salt is already spent: something stands at the address it names, put there by this commitment
+    ///      or by an earlier one, and CREATE3 cannot deploy over it
+    error SaltAlreadyDeployed();
     /// @dev The init code did not leave a contract behind, having reverted or returned nothing
     error ContractDeploymentFailed();
 
