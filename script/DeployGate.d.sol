@@ -1,20 +1,23 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.5.0;
 
-/// @dev Zero in every byte CreateX reads: no sender in the first 20, no redeploy protection in the 21st, which
-///      is the combination CreateX guards as `keccak256(abi.encode(salt))`, scoped to neither the caller nor
-///      the chain, so anyone can deploy the gate and every chain puts it at the same address.
+/// @dev Mined, and for the digits alone: the high 11 bytes carry the entropy that opens the address
+///      `0x6a7e000000`, and the low 21 are zero.
 ///
-///      The low 11 bytes are free, which is the whole of what mining a vanity address may spend. Zero for as
-///      long as nothing has been mined into them.
-bytes32 constant DEPLOY_GATE_SALT = bytes32(0);
+///      CreateX reads the first 20 bytes of a salt as a permissioned deployer and the 21st as a cross-chain
+///      flag. A salt naming neither the caller nor the zero address is the case it guards with nothing but
+///      `keccak256(abi.encode(salt))`, scoped to neither the caller nor the chain, so anyone can deploy the
+///      gate and every chain puts it at the same address. That branch is the whole of what pins this address,
+///      and `testSaltIsPermissionlessAndChainAgnostic` is what holds the gate to it.
+bytes32 constant DEPLOY_GATE_SALT = 0x5ade7aaf8edade03b47faf000000000000000000000000000000000000000000;
 
 /// @dev `CREATE2(CreateX, keccak256(abi.encode(DEPLOY_GATE_SALT)), keccak256(type(DeployGate).creationCode))`.
 ///      CREATE2 rather than CREATE3 so the address covers the init code, which is what makes it safe for
 ///      anyone to deploy: the only contract that fits this address is the gate.
 ///
-///      Follows the gate's bytecode, so a change to DeployGate.sol or to its compiler settings moves it.
-address constant DEPLOY_GATE_ADDRESS = 0xac9C69450016396F0A00648aBA4488433f958E12;
+///      Follows the gate's bytecode and the salt, so a change to DeployGate.sol, to its compiler settings, or
+///      to the mined salt moves it.
+address constant DEPLOY_GATE_ADDRESS = 0x6A7E00000037a6eA2bEF7181551251DBf7eD271E;
 
 /// @dev The address covers the *init* code, and a constructor that read state could still return different
 ///      runtime code from it. The gate has no immutables and reads nothing, so this follows from it.
