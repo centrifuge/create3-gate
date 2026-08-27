@@ -200,7 +200,7 @@ contract DeployGateTest is Test, CreateXScript {
 
         vm.startPrank(NAMESPACE);
         deployGate.setDelegate(DELEGATE, false);
-        deployGate.clear();
+        deployGate.clear(NAMESPACE);
         vm.stopPrank();
 
         assertEq(_term(NAMESPACE), 1, "a further term");
@@ -236,7 +236,7 @@ contract DeployGateTest is Test, CreateXScript {
         deployGate.commit(NAMESPACE, OTHER_ID, salts, hashes, _executors(EXECUTOR));
 
         vm.prank(NAMESPACE);
-        deployGate.clear();
+        deployGate.clear(NAMESPACE);
 
         // Same salt, same address, and it is the namespace's commitment that lands there
         _validate(salts, initCodes);
@@ -251,28 +251,104 @@ contract DeployGateTest is Test, CreateXScript {
         _validate(salts, initCodes);
 
         vm.prank(NAMESPACE);
-        deployGate.clear();
+        deployGate.clear(NAMESPACE);
 
         _validate(salts, initCodes);
         assertEq(_nonce(NAMESPACE, ID), 2, "the second generation of that id");
         assertEq(Target(_deploy(salts, initCodes)[0]).value(), 1);
     }
 
-    /// @dev Always the caller's own namespace, like `setDelegate`: a delegate calling it ends its own term and
-    ///      reaches nothing of the namespace's, so a leaked key cannot empty the namespace of the deployment it was helping
-    function testClearIsPerNamespace() public {
+    /// @dev A delegate reaches the namespace's own clearance, which is what makes the delay's window
+    ///      actionable: the key that is warm enough to be watching is the key that can stop what it sees,
+    ///      including a commitment under an id it was never told about
+    function testDelegateMayClear() public {
         (bytes32[] memory salts, bytes[] memory initCodes) = _pairs(1);
+
+        vm.startPrank(NAMESPACE);
+        deployGate.setDelay(6 hours);
+        deployGate.setDelegate(DELEGATE, true);
+        deployGate.setDelegate(OTHER, true);
+        vm.stopPrank();
+
+        // What the leaked key committed, under an id of its own choosing
+        vm.prank(DELEGATE);
+        deployGate.commit(NAMESPACE, OTHER_ID, salts, _hashes(initCodes), _executors(EXECUTOR));
+
+        // And the warm key that is watching stops it, without the namespace signing anything
+        vm.prank(OTHER);
+        deployGate.clear(NAMESPACE);
+
+        assertEq(_term(NAMESPACE), 1, "the namespace's own term moved");
+        assertEq(deployGate.committed(NAMESPACE, OTHER_ID, salts[0]), 0, "and holds nothing");
+
+        vm.warp(block.timestamp + 6 hours);
+        vm.prank(EXECUTOR);
+        vm.expectRevert(IDeployGate.NotExecutor.selector);
+        deployGate.deploy(NAMESPACE, OTHER_ID, salts[0], initCodes[0]);
+    }
+
+    /// @dev The delegations hang off the term the clearance moves, so a delegate clearing revokes itself along
+    ///      with the rest: a leaked key gets one clearance and no second one, and what it cost the namespace
+    ///      is a grant made again with nothing left pending to race
+    function testDelegateClearingRevokesItself() public {
+        (bytes32[] memory salts, bytes[] memory initCodes) = _pairs(1);
+
+        vm.prank(NAMESPACE);
+        deployGate.setDelegate(DELEGATE, true);
+
+        vm.startPrank(DELEGATE);
+        deployGate.clear(NAMESPACE);
+
+        assertFalse(deployGate.isDelegate(NAMESPACE, DELEGATE), "no longer a delegate");
+
+        vm.expectRevert(IDeployGate.NotAuthorized.selector);
+        deployGate.clear(NAMESPACE);
+
+        vm.expectRevert(IDeployGate.NotAuthorized.selector);
+        deployGate.commit(NAMESPACE, ID, salts, _hashes(initCodes), _executors(EXECUTOR));
+        vm.stopPrank();
+
+        // And the namespace itself is untouched by any of it
         _validate(salts, initCodes);
+        assertEq(Target(_deploy(salts, initCodes)[0]).value(), 1);
+    }
+
+    /// @dev The one thing a clearance must not be is a way out of the delay. The delay is not a delegation and
+    ///      does not hang off the term, so a delegate that clears is a delegate that has revoked itself under
+    ///      a delay that still stands, and the grant that follows commits under it as before
+    function testClearingIsNoWayOutOfTheDelay() public {
+        (bytes32[] memory salts, bytes[] memory initCodes) = _pairs(1);
+
+        vm.startPrank(NAMESPACE);
+        deployGate.setDelay(6 hours);
+        deployGate.setDelegate(DELEGATE, true);
+        vm.stopPrank();
+
+        vm.prank(DELEGATE);
+        deployGate.clear(NAMESPACE);
+
+        assertEq(_delay(NAMESPACE), 6 hours, "the delay survived the clearance");
 
         vm.prank(NAMESPACE);
         deployGate.setDelegate(DELEGATE, true);
 
         vm.prank(DELEGATE);
-        deployGate.clear();
+        deployGate.commit(NAMESPACE, ID, salts, _hashes(initCodes), _executors(EXECUTOR));
+        assertEq(_deployableAt(NAMESPACE, ID), block.timestamp + 6 hours, "and still bounds what it commits");
+    }
 
-        assertEq(_term(DELEGATE), 1, "the delegate ended its own term");
-        assertEq(_term(NAMESPACE), 0, "and none of the namespace's");
-        assertEq(Target(_deploy(salts, initCodes)[0]).value(), 1, "the commitment still deploys");
+    /// @dev Everyone else is nobody: the clearance is subtractive, but it is subtractive of a deployment in
+    ///      progress, so it is the namespace's write surface and reaches no further than `commit` does
+    function testOnlyTheNamespaceOrItsDelegatesMayClear() public {
+        (bytes32[] memory salts, bytes[] memory initCodes) = _pairs(1);
+        _validate(salts, initCodes);
+
+        vm.prank(OTHER);
+        vm.expectRevert(IDeployGate.NotAuthorized.selector);
+        deployGate.clear(NAMESPACE);
+
+        assertEq(_term(NAMESPACE), 0, "the term did not move");
+        assertEq(Target(_deploy(salts, initCodes)[0]).value(), 1, "and the commitment still deploys");
     }
 
     /// @dev The delegations hang off the term with everything else, so emptying the namespace is one call
@@ -289,7 +365,7 @@ contract DeployGateTest is Test, CreateXScript {
         deployGate.commit(NAMESPACE, OTHER_ID, salts, _hashes(initCodes), _executors(EXECUTOR));
 
         vm.prank(NAMESPACE);
-        deployGate.clear();
+        deployGate.clear(NAMESPACE);
 
         assertFalse(deployGate.isDelegate(NAMESPACE, DELEGATE), "no longer a delegate");
         assertFalse(deployGate.isExecutor(NAMESPACE, OTHER_ID, EXECUTOR), "and nothing left to deploy");
@@ -317,7 +393,7 @@ contract DeployGateTest is Test, CreateXScript {
         assertEq(_commitmentTerm(NAMESPACE, ID), _term(NAMESPACE), "which is the one it is in, so it stands");
 
         vm.prank(NAMESPACE);
-        deployGate.clear();
+        deployGate.clear(NAMESPACE);
 
         // Everything under the id reads as it did, which is what the term is there to qualify
         assertEq(_nonce(NAMESPACE, ID), 1, "the generation is still reported");
@@ -333,7 +409,7 @@ contract DeployGateTest is Test, CreateXScript {
 
         vm.startPrank(NAMESPACE);
         deployGate.setDelegate(DELEGATE, true);
-        deployGate.clear();
+        deployGate.clear(NAMESPACE);
         deployGate.setDelegate(DELEGATE, true);
         vm.stopPrank();
 
@@ -465,7 +541,7 @@ contract DeployGateTest is Test, CreateXScript {
 
         vm.startPrank(NAMESPACE);
         deployGate.setDelegate(DELEGATE, false);
-        deployGate.clear();
+        deployGate.clear(NAMESPACE);
         vm.stopPrank();
 
         vm.warp(block.timestamp + 6 hours);
@@ -528,7 +604,7 @@ contract DeployGateTest is Test, CreateXScript {
         emit IDeployGate.Clear(NAMESPACE, 1);
 
         vm.prank(NAMESPACE);
-        deployGate.clear();
+        deployGate.clear(NAMESPACE);
     }
 
     /// @dev `setDelegate` always writes to the caller's own namespace, so a delegate naming one names it in
@@ -741,7 +817,7 @@ contract DeployGateTest is Test, CreateXScript {
 
         // Whichever deploys first takes it, and the second finds the proxy already there
         vm.prank(EXECUTOR);
-        vm.expectRevert(IDeployGate.ProxyDeploymentFailed.selector);
+        vm.expectRevert(IDeployGate.SaltAlreadyDeployed.selector);
         deployGate.deploy(NAMESPACE, OTHER_ID, salts[0], initCodes[0]);
     }
 
@@ -862,7 +938,7 @@ contract DeployGateTest is Test, CreateXScript {
 
         vm.startPrank(NAMESPACE);
         deployGate.commit(NAMESPACE, ID, salts, hashes, _executors(EXECUTOR));
-        deployGate.clear();
+        deployGate.clear(NAMESPACE);
 
         vm.expectEmit();
         emit IDeployGate.Commit(NAMESPACE, ID, 2, 1, 0, salts, hashes, _executors(EXECUTOR));
@@ -1043,7 +1119,7 @@ contract DeployGateTest is Test, CreateXScript {
 
         // Whose address is taken, so the CREATE3 proxy is what stops it rather than the gate
         vm.prank(EXECUTOR);
-        vm.expectRevert(IDeployGate.ProxyDeploymentFailed.selector);
+        vm.expectRevert(IDeployGate.SaltAlreadyDeployed.selector);
         deployGate.deploy(NAMESPACE, ID, salts[0], initCodes[0]);
 
         // And nothing behind it is reachable, because position is part of what was committed
@@ -1098,7 +1174,7 @@ contract DeployGateTest is Test, CreateXScript {
         assertEq(_cursor(NAMESPACE, ID), 1, "the fresh entry goes through");
 
         vm.prank(EXECUTOR);
-        vm.expectRevert(IDeployGate.ProxyDeploymentFailed.selector);
+        vm.expectRevert(IDeployGate.SaltAlreadyDeployed.selector);
         deployGate.deploy(NAMESPACE, ID, next[1], nextInitCodes[1]);
 
         assertEq(_cursor(NAMESPACE, ID), 1, "and the sequence stops where the address is taken");

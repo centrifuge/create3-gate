@@ -19,7 +19,7 @@ library Create3 {
         assembly ("memory-safe") {
             proxy := create2(0, add(proxyInitCode, 0x20), mload(proxyInitCode), salt)
         }
-        require(proxy != address(0), IDeployGate.ProxyDeploymentFailed());
+        require(proxy != address(0), IDeployGate.SaltAlreadyDeployed());
 
         // The proxy CREATEs whatever it is called with, and reports nothing back, so the deployment is
         // checked by looking at the address it had to land on

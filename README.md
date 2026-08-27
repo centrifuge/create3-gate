@@ -108,9 +108,11 @@ Each commitment sits under an id the caller picks:
 `setDelegate(delegatee, true)` lets a second key run the commit phase, for when signing every commitment from
 the cold account is impractical. A delegate can commit anything the cold key could, so `setDelay` bounds it:
 what a delegate commits is not deployable until the delay has passed, which is the window in which a commitment
-nobody meant to make can still be stopped. Set the delay before granting. `clear()` empties the namespace,
-every delegation and every commitment under any id, in one write, leaving the salts unspent so what was going
-to be deployed still can be. Both are per chain, like every other call.
+nobody meant to make can still be stopped. Set the delay before granting. `clear(namespace)` empties it, every
+delegation and every commitment under any id, in one write, leaving the salts unspent so what was going to be
+deployed still can be. The delegates can clear as well as the namespace, so acting inside the window is a warm
+signature rather than a cold one; a delegate that clears revokes itself along with everything else, and the
+delay survives, so a clearance is no way around it. Both are per chain, like every other call.
 
 Every call is documented in full in [`src/IDeployGate.sol`](src/IDeployGate.sol).
 
@@ -121,7 +123,7 @@ your own, the way `CreateX.d.sol` is vendored from [createx-forge](https://githu
 Vendoring is enough because nothing outside this repository compiles `DeployGate.sol`: the constants are bytes
 and the address is fixed on chain, so no compiler settings have to match.
 
-The gate is at `0xBA08f1fD092031C81296fC59f6539b21b38f2249` on every chain, as pinned in
+The gate is at `0xac9C69450016396F0A00648aBA4488433f958E12` on every chain, as pinned in
 `script/DeployGate.d.sol`, and anyone can put it there. It takes no constructor arguments, holds no privilege
 over anything it deploys and has no owner or admin, so there is nothing to configure and no order to get right.
 
