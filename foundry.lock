@@ -1,0 +1,8 @@
+{
+  "lib/createx-forge": {
+    "rev": "1d5ed80fabe164421228d7ce0fd5c7f3e3010300"
+  },
+  "lib/forge-std": {
+    "rev": "1eea5bae12ae557d589f9f0f0edae2faa47cb262"
+  }
+}
