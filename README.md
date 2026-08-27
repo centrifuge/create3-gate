@@ -134,6 +134,12 @@ so anyone can deploy the gate and every chain puts it at the same address. Chang
 compiler settings in `foundry.toml`, produces a different gate at a different address, and every address derived
 from it moves.
 
+It compiles for London, so it needs no opcode newer than that and runs on chains several forks behind. What it
+does need is standard address derivation: a chain that computes `CREATE2` or `CREATE` addresses its own way, as
+the zkStack chains do, puts the gate somewhere other than the address above and is out of scope. `setUpDeployGate`
+checks the code at the address rather than assuming it, so such a chain fails the run instead of deploying into
+the unknown.
+
 ## License
 
 MIT, see [LICENSE](LICENSE).
