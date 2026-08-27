@@ -128,10 +128,11 @@ The gate is at `0x6A7E00000037a6eA2bEF7181551251DBf7eD271E` on every chain, as p
 over anything it deploys and has no owner or admin, so there is nothing to configure and no order to get right.
 
 It is deployed through CreateX's `deployCreate2` rather than `deployCreate3`. A CREATE2 address covers the init
-code, so the only contract that fits the gate's address is the gate. The salt is zero in every byte CreateX
-reads, the combination it guards as the salt alone, so the address is the same on every chain. Changing `DeployGate.sol`, or the compiler
-settings in `foundry.toml`, produces a different gate at a different address, and every address derived from it
-moves.
+code, so the only contract that fits the gate's address is the gate. The salt is mined for the leading digits
+and names neither a deployer nor a chain, which is the case CreateX guards with nothing but the salt's own hash,
+so anyone can deploy the gate and every chain puts it at the same address. Changing `DeployGate.sol`, or the
+compiler settings in `foundry.toml`, produces a different gate at a different address, and every address derived
+from it moves.
 
 ## License
 
