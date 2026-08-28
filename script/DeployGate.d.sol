@@ -2,14 +2,14 @@
 pragma solidity >=0.5.0;
 
 /// @dev Mined, and for the digits alone: the high 11 bytes carry the entropy that opens the address
-///      `0x6a7e00000000`, and the low 21 are zero.
+///      `0x6a7e0000000`, and the low 21 are zero.
 ///
 ///      CreateX reads the first 20 bytes of a salt as a permissioned deployer and the 21st as a cross-chain
 ///      flag. A salt naming neither the caller nor the zero address is the case it guards with nothing but
 ///      `keccak256(abi.encode(salt))`, scoped to neither the caller nor the chain, so anyone can deploy the
 ///      gate and every chain puts it at the same address. That branch is the whole of what pins this address,
 ///      and `testSaltIsPermissionlessAndChainAgnostic` is what holds the gate to it.
-bytes32 constant DEPLOY_GATE_SALT = 0x9c920075c57deb00d21f00000000000000000000000000000000000000000000;
+bytes32 constant DEPLOY_GATE_SALT = 0x0934848c1c43d7033df5d5000000000000000000000000000000000000000000;
 
 /// @dev `CREATE2(CreateX, keccak256(abi.encode(DEPLOY_GATE_SALT)), keccak256(type(DeployGate).creationCode))`.
 ///      CREATE2 rather than CREATE3 so the address covers the init code, which is what makes it safe for
@@ -17,7 +17,7 @@ bytes32 constant DEPLOY_GATE_SALT = 0x9c920075c57deb00d21f0000000000000000000000
 ///
 ///      Follows the gate's bytecode and the salt, so a change to DeployGate.sol, to its compiler settings, or
 ///      to the mined salt moves it.
-address constant DEPLOY_GATE_ADDRESS = 0xfBa61A71d33eC38E8aB9F146cf80fbDa6EA23a6b;
+address constant DEPLOY_GATE_ADDRESS = 0x6A7e0000000a49c0DE4c51F5977b96a5289d3a39;
 
 /// @dev The address covers the *init* code, and a constructor that read state could still return different
 ///      runtime code from it. The gate has no immutables and reads nothing, so this follows from it.
