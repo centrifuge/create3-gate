@@ -118,27 +118,91 @@ Every call is documented in full in [`src/IDeployGate.sol`](src/IDeployGate.sol)
 
 ## Installing
 
-Add this repository as a dependency, or vendor `script/DeployGate.d.sol` and `script/DeployGateScript.sol` into
-your own, the way `CreateX.d.sol` is vendored from [createx-forge](https://github.com/radeksvarz/createx-forge).
-Vendoring is enough because nothing outside this repository compiles `DeployGate.sol`: the constants are bytes
-and the address is fixed on chain, so no compiler settings have to match.
+Add this repository as a dependency, or vendor `script/DeployGate.d.sol` and `script/DeployGateScript.sol`, the
+way `CreateX.d.sol` is vendored from [createx-forge](https://github.com/radeksvarz/createx-forge). Nothing
+outside this repository compiles `DeployGate.sol`, so no compiler settings have to match.
 
-The gate is at `0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A` on every chain, as pinned in
-`script/DeployGate.d.sol`, and anyone can put it there. It takes no constructor arguments, holds no privilege
-over anything it deploys and has no owner or admin, so there is nothing to configure and no order to get right.
+The gate takes no constructor arguments and has no owner, so there is nothing to configure. It is deployed
+through CreateX's `deployCreate2` rather than `deployCreate3`: a CREATE2 address covers the init code, so the
+only contract that fits the gate's address is the gate. Changing `DeployGate.sol`, or the compiler settings in
+`foundry.toml`, produces a different gate at a different address, and every address derived from it moves.
 
-It is deployed through CreateX's `deployCreate2` rather than `deployCreate3`. A CREATE2 address covers the init
-code, so the only contract that fits the gate's address is the gate. The salt is mined for the leading digits
-and names neither a deployer nor a chain, which is the case CreateX guards with nothing but the salt's own hash,
-so anyone can deploy the gate and every chain puts it at the same address. Changing `DeployGate.sol`, or the
-compiler settings in `foundry.toml`, produces a different gate at a different address, and every address derived
-from it moves.
+It compiles for London, so it runs on chains several forks behind. What it does need is standard address
+derivation: a chain that computes `CREATE2` or `CREATE` addresses its own way, as the zkStack chains do, is out
+of scope, and `setUpDeployGate` fails the run there rather than deploying into the unknown.
 
-It compiles for London, so it needs no opcode newer than that and runs on chains several forks behind. What it
-does need is standard address derivation: a chain that computes `CREATE2` or `CREATE` addresses its own way, as
-the zkStack chains do, puts the gate somewhere other than the address above and is out of scope. `setUpDeployGate`
-checks the code at the address rather than assuming it, so such a chain fails the run instead of deploying into
-the unknown.
+## Deployments
+
+`0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A`, the same address on all 52, listed machine-readably in
+[`deployments/deployments.json`](deployments/deployments.json).
+
+| Chain | Chain ID | Explorer |
+|---|---|---|
+| Ethereum | `1` | [etherscan.io](https://etherscan.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Optimism | `10` | [optimistic.etherscan.io](https://optimistic.etherscan.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| XDC | `50` | [xdcscan.com](https://xdcscan.com/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| BNB Smart Chain | `56` | [bscscan.com](https://bscscan.com/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Gnosis | `100` | [gnosisscan.io](https://gnosisscan.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Fuse | `122` | [explorer.fuse.io](https://explorer.fuse.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Unichain | `130` | [uniscan.xyz](https://uniscan.xyz/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Polygon | `137` | [polygonscan.com](https://polygonscan.com/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Monad | `143` | [monadscan.com](https://monadscan.com/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Sonic | `146` | [sonicscan.org](https://sonicscan.org/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Hashkey | `177` | [hsk.blockscout.com](https://hsk.blockscout.com/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| X Layer | `196` | [www.oklink.com/xlayer](https://www.oklink.com/xlayer/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| opBNB | `204` | [opbnb.bscscan.com](https://opbnb.bscscan.com/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Fraxtal | `252` | [fraxscan.com](https://fraxscan.com/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| WorldChain | `480` | [worldscan.org](https://worldscan.org/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Stable | `988` | [stablescan.xyz](https://stablescan.xyz/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| HyperEVM | `999` | [hyperevmscan.io](https://hyperevmscan.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Lisk | `1135` | [blockscout.lisk.com](https://blockscout.lisk.com/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Story | `1514` | [datanetscan.io](https://datanetscan.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Gravity | `1625` | [explorer.gravity.xyz](https://explorer.gravity.xyz/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Pharos | `1672` | [www.pharosscan.xyz](https://www.pharosscan.xyz/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Metal | `1750` | [explorer.metall2.com](https://explorer.metall2.com/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Injective | `1776` | [blockscout.injective.network](https://blockscout.injective.network/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Kava | `2222` | [kavascan.com](https://kavascan.com/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| GOAT | `2345` | [explorer.goat.network](https://explorer.goat.network/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Morph | `2818` | [explorer.morphl2.io](https://explorer.morphl2.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Peaq | `3338` | [peaq.subscan.io](https://peaq.subscan.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| MegaETH | `4326` | [mega.etherscan.io](https://mega.etherscan.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Robinhood | `4663` | [robinscan.io](https://robinscan.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Superseed | `5330` | [explorer.superseed.xyz](https://explorer.superseed.xyz/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Kaia | `8217` | [kaiascope.com](https://kaiascope.com/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Base | `8453` | [basescan.org](https://basescan.org/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Plasma | `9745` | [plasmascan.to](https://plasmascan.to/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Immutable zkEVM | `13371` | [explorer.immutable.com](https://explorer.immutable.com/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| 0G | `16661` | [chainscan.0g.ai](https://chainscan.0g.ai/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| ApeChain | `33139` | [apescan.io](https://apescan.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Mode | `34443` | [explorer.mode.network](https://explorer.mode.network/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Arbitrum One | `42161` | [arbiscan.io](https://arbiscan.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Arbitrum Nova | `42170` | [nova-explorer.arbitrum.io](https://nova-explorer.arbitrum.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Celo | `42220` | [celoscan.io](https://celoscan.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Etherlink | `42793` | [explorer.etherlink.com](https://explorer.etherlink.com/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Hemi | `43111` | [explorer.hemi.xyz](https://explorer.hemi.xyz/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Avalanche C-Chain | `43114` | [snowtrace.io](https://snowtrace.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Linea | `59144` | [lineascan.build](https://lineascan.build/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| BOB | `60808` | [explorer.gobob.xyz](https://explorer.gobob.xyz/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Berachain | `80094` | [berascan.com](https://berascan.com/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Blast | `81457` | [blastscan.io](https://blastscan.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Plume | `98866` | [explorer.plume.org](https://explorer.plume.org/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Katana | `747474` | [katanascan.com](https://katanascan.com/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| XRPL EVM | `1440000` | [explorer.xrplevm.org](https://explorer.xrplevm.org/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Jovay | `5734951` | [explorer.jovay.io/l2](https://explorer.jovay.io/l2/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Zora | `7777777` | [explorer.zora.energy](https://explorer.zora.energy/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+
+### Putting it on a chain that has none
+
+The gate takes no arguments and grants its deployer nothing, so this needs no permission and no coordination:
+
+```console
+cast send 0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed \
+  "deployCreate2(bytes32,bytes)" $DEPLOY_GATE_SALT $DEPLOY_GATE_BYTECODE \
+  --private-key $PK --rpc-url $RPC
+```
+
+Both constants are in [`script/DeployGate.d.sol`](script/DeployGate.d.sol); no source and no compiler settings
+are involved. It costs about 1.12M gas.
 
 ## License
 
