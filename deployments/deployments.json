@@ -1,0 +1,47 @@
+[
+  {
+    "name": "Ethereum",
+    "chainId": 1,
+    "urls": ["https://etherscan.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A"]
+  },
+  {
+    "name": "Optimism",
+    "chainId": 10,
+    "urls": ["https://optimistic.etherscan.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A"]
+  },
+  {
+    "name": "BNB Smart Chain",
+    "chainId": 56,
+    "urls": ["https://bscscan.com/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A"]
+  },
+  {
+    "name": "HyperEVM",
+    "chainId": 999,
+    "urls": ["https://hyperevmscan.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A"]
+  },
+  {
+    "name": "Pharos",
+    "chainId": 1672,
+    "urls": ["https://www.pharosscan.xyz/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A"]
+  },
+  {
+    "name": "Base",
+    "chainId": 8453,
+    "urls": ["https://basescan.org/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A"]
+  },
+  {
+    "name": "Arbitrum One",
+    "chainId": 42161,
+    "urls": ["https://arbiscan.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A"]
+  },
+  {
+    "name": "Avalanche C-Chain",
+    "chainId": 43114,
+    "urls": ["https://snowtrace.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A"]
+  },
+  {
+    "name": "Plume",
+    "chainId": 98866,
+    "urls": ["https://explorer.plume.org/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A"]
+  }
+]

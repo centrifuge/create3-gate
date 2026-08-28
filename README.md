@@ -116,6 +116,50 @@ delay survives, so a clearance is no way around it. Both are per chain, like eve
 
 Every call is documented in full in [`src/IDeployGate.sol`](src/IDeployGate.sol).
 
+## Deployments
+
+`0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A`, the same address on every chain, listed machine-readably in
+[`deployments/deployments.json`](deployments/deployments.json).
+
+| Chain | Chain ID | Explorer |
+|---|---|---|
+| Ethereum | `1` | [etherscan.io](https://etherscan.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Optimism | `10` | [optimistic.etherscan.io](https://optimistic.etherscan.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| BNB Smart Chain | `56` | [bscscan.com](https://bscscan.com/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| HyperEVM | `999` | [hyperevmscan.io](https://hyperevmscan.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Pharos | `1672` | [pharosscan.xyz](https://www.pharosscan.xyz/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Base | `8453` | [basescan.org](https://basescan.org/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Arbitrum One | `42161` | [arbiscan.io](https://arbiscan.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Avalanche C-Chain | `43114` | [snowtrace.io](https://snowtrace.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Plume | `98866` | [explorer.plume.org](https://explorer.plume.org/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+
+Source is verified everywhere except Pharos, whose explorer exposes no verification API; `forge verify-contract
+--show-standard-json-input` produces what its UI asks for.
+
+### Putting it on a chain that has none
+
+The gate takes no arguments and grants its deployer nothing, so this needs no permission and no coordination:
+
+```console
+cast send 0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed \
+  "deployCreate2(bytes32,bytes)" $DEPLOY_GATE_SALT $DEPLOY_GATE_BYTECODE \
+  --private-key $PK --rpc-url $RPC
+```
+
+Both constants are in [`script/DeployGate.d.sol`](script/DeployGate.d.sol); no source and no compiler settings
+are involved. It costs about 1.12M gas. Before spending anything, simulate it and check where it would land:
+
+```console
+cast call 0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed \
+  "deployCreate2(bytes32,bytes)" $DEPLOY_GATE_SALT $DEPLOY_GATE_BYTECODE --rpc-url $RPC
+```
+
+An answer other than the address above means the chain derives addresses its own way and is out of scope. After
+deploying, `cast codehash` at the address has to equal `DEPLOY_GATE_EXTCODEHASH`, which is what proves the code
+there is the gate rather than something that merely fit.
+
+A CreateX-less chain needs [CreateX](https://github.com/pcaversaccio/createx) first, which is its own errand.
+
 ## Installing
 
 Add this repository as a dependency, or vendor `script/DeployGate.d.sol` and `script/DeployGateScript.sol` into
