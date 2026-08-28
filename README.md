@@ -116,6 +116,21 @@ delay survives, so a clearance is no way around it. Both are per chain, like eve
 
 Every call is documented in full in [`src/IDeployGate.sol`](src/IDeployGate.sol).
 
+## Installing
+
+Add this repository as a dependency, or vendor `script/DeployGate.d.sol` and `script/DeployGateScript.sol`, the
+way `CreateX.d.sol` is vendored from [createx-forge](https://github.com/radeksvarz/createx-forge). Nothing
+outside this repository compiles `DeployGate.sol`, so no compiler settings have to match.
+
+The gate takes no constructor arguments and has no owner, so there is nothing to configure. It is deployed
+through CreateX's `deployCreate2` rather than `deployCreate3`: a CREATE2 address covers the init code, so the
+only contract that fits the gate's address is the gate. Changing `DeployGate.sol`, or the compiler settings in
+`foundry.toml`, produces a different gate at a different address, and every address derived from it moves.
+
+It compiles for London, so it runs on chains several forks behind. What it does need is standard address
+derivation: a chain that computes `CREATE2` or `CREATE` addresses its own way, as the zkStack chains do, is out
+of scope, and `setUpDeployGate` fails the run there rather than deploying into the unknown.
+
 ## Deployments
 
 `0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A`, the same address on all 52, listed machine-readably in
@@ -176,16 +191,6 @@ Every call is documented in full in [`src/IDeployGate.sol`](src/IDeployGate.sol)
 | Jovay | `5734951` | [explorer.jovay.io/l2](https://explorer.jovay.io/l2/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
 | Zora | `7777777` | [explorer.zora.energy](https://explorer.zora.energy/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
 
-Source is verified on the great majority; the handful of explorers that expose no working verification API are
-the exceptions. Most chains take a plain `forge verify-contract --chain <id>`, Blockscout instances take
-`--verifier blockscout --verifier-url <explorer>/api`, and a SocialScan explorer answers somewhere neither its
-hostname nor its redirect suggests:
-
-```console
-forge verify-contract $DEPLOY_GATE_ADDRESS src/DeployGate.sol:DeployGate --verifier blockscout \
-  --verifier-url https://api.socialscan.io/pharos-mainnet/v1/explorer/command_api/contract
-```
-
 ### Putting it on a chain that has none
 
 The gate takes no arguments and grants its deployer nothing, so this needs no permission and no coordination:
@@ -197,42 +202,7 @@ cast send 0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed \
 ```
 
 Both constants are in [`script/DeployGate.d.sol`](script/DeployGate.d.sol); no source and no compiler settings
-are involved. It costs about 1.12M gas. Before spending anything, simulate it and check where it would land:
-
-```console
-cast call 0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed \
-  "deployCreate2(bytes32,bytes)" $DEPLOY_GATE_SALT $DEPLOY_GATE_BYTECODE --rpc-url $RPC
-```
-
-An answer other than the address above means the chain derives addresses its own way and is out of scope. After
-deploying, `cast codehash` at the address has to equal `DEPLOY_GATE_EXTCODEHASH`, which is what proves the code
-there is the gate rather than something that merely fit.
-
-A CreateX-less chain needs [CreateX](https://github.com/pcaversaccio/createx) first, which is its own errand.
-
-## Installing
-
-Add this repository as a dependency, or vendor `script/DeployGate.d.sol` and `script/DeployGateScript.sol` into
-your own, the way `CreateX.d.sol` is vendored from [createx-forge](https://github.com/radeksvarz/createx-forge).
-Vendoring is enough because nothing outside this repository compiles `DeployGate.sol`: the constants are bytes
-and the address is fixed on chain, so no compiler settings have to match.
-
-The gate is at `0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A` on every chain, as pinned in
-`script/DeployGate.d.sol`, and anyone can put it there. It takes no constructor arguments, holds no privilege
-over anything it deploys and has no owner or admin, so there is nothing to configure and no order to get right.
-
-It is deployed through CreateX's `deployCreate2` rather than `deployCreate3`. A CREATE2 address covers the init
-code, so the only contract that fits the gate's address is the gate. The salt is mined for the leading digits
-and names neither a deployer nor a chain, which is the case CreateX guards with nothing but the salt's own hash,
-so anyone can deploy the gate and every chain puts it at the same address. Changing `DeployGate.sol`, or the
-compiler settings in `foundry.toml`, produces a different gate at a different address, and every address derived
-from it moves.
-
-It compiles for London, so it needs no opcode newer than that and runs on chains several forks behind. What it
-does need is standard address derivation: a chain that computes `CREATE2` or `CREATE` addresses its own way, as
-the zkStack chains do, puts the gate somewhere other than the address above and is out of scope. `setUpDeployGate`
-checks the code at the address rather than assuming it, so such a chain fails the run instead of deploying into
-the unknown.
+are involved. It costs about 1.12M gas.
 
 ## License
 
