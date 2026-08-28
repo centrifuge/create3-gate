@@ -133,8 +133,13 @@ Every call is documented in full in [`src/IDeployGate.sol`](src/IDeployGate.sol)
 | Avalanche C-Chain | `43114` | [snowtrace.io](https://snowtrace.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
 | Plume | `98866` | [explorer.plume.org](https://explorer.plume.org/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
 
-Source is verified everywhere except Pharos, whose explorer exposes no verification API; `forge verify-contract
---show-standard-json-input` produces what its UI asks for.
+Source is verified on all of them. Most take a plain `forge verify-contract --chain <id>`; Plume is Blockscout,
+and Pharos is a SocialScan explorer, whose endpoint is not the one the explorer's own hostname suggests:
+
+```console
+forge verify-contract $DEPLOY_GATE_ADDRESS src/DeployGate.sol:DeployGate --verifier blockscout \
+  --verifier-url https://api.socialscan.io/pharos-mainnet/v1/explorer/command_api/contract
+```
 
 ### Putting it on a chain that has none
 
