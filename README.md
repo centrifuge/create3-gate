@@ -126,6 +126,8 @@ Every call is documented in full in [`src/IDeployGate.sol`](src/IDeployGate.sol)
 | Ethereum | `1` | [etherscan.io](https://etherscan.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
 | Optimism | `10` | [optimistic.etherscan.io](https://optimistic.etherscan.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
 | BNB Smart Chain | `56` | [bscscan.com](https://bscscan.com/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Monad | `143` | [monadscan.com](https://monadscan.com/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| X Layer | `196` | [oklink.com/xlayer](https://www.oklink.com/xlayer/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
 | HyperEVM | `999` | [hyperevmscan.io](https://hyperevmscan.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
 | Pharos | `1672` | [pharosscan.xyz](https://www.pharosscan.xyz/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
 | Base | `8453` | [basescan.org](https://basescan.org/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
