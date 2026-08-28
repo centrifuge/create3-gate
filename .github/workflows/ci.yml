@@ -30,6 +30,9 @@ jobs:
       - name: Check formatting
         run: forge fmt --check
 
+      - name: Lint
+        run: forge lint
+
       # Includes testConstantsMatchTheBytecode, which is what holds script/DeployGate.d.sol to the contract
       - name: Run tests
         run: forge test -vvv

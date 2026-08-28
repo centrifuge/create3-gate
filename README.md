@@ -123,14 +123,22 @@ your own, the way `CreateX.d.sol` is vendored from [createx-forge](https://githu
 Vendoring is enough because nothing outside this repository compiles `DeployGate.sol`: the constants are bytes
 and the address is fixed on chain, so no compiler settings have to match.
 
-The gate is at `0xac9C69450016396F0A00648aBA4488433f958E12` on every chain, as pinned in
+The gate is at `0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A` on every chain, as pinned in
 `script/DeployGate.d.sol`, and anyone can put it there. It takes no constructor arguments, holds no privilege
 over anything it deploys and has no owner or admin, so there is nothing to configure and no order to get right.
 
 It is deployed through CreateX's `deployCreate2` rather than `deployCreate3`. A CREATE2 address covers the init
-code, so the only contract that fits the gate's address is the gate. Changing `DeployGate.sol`, or the compiler
-settings in `foundry.toml`, produces a different gate at a different address, and every address derived from it
-moves.
+code, so the only contract that fits the gate's address is the gate. The salt is mined for the leading digits
+and names neither a deployer nor a chain, which is the case CreateX guards with nothing but the salt's own hash,
+so anyone can deploy the gate and every chain puts it at the same address. Changing `DeployGate.sol`, or the
+compiler settings in `foundry.toml`, produces a different gate at a different address, and every address derived
+from it moves.
+
+It compiles for London, so it needs no opcode newer than that and runs on chains several forks behind. What it
+does need is standard address derivation: a chain that computes `CREATE2` or `CREATE` addresses its own way, as
+the zkStack chains do, puts the gate somewhere other than the address above and is out of scope. `setUpDeployGate`
+checks the code at the address rather than assuming it, so such a chain fails the run instead of deploying into
+the unknown.
 
 ## License
 

@@ -1309,6 +1309,37 @@ contract DeployGateBytecodeTest is Test, CreateXScript {
         assertEq(keccak256(type(DeployGate).runtimeCode), DEPLOY_GATE_EXTCODEHASH, "DEPLOY_GATE_EXTCODEHASH is stale");
     }
 
+    /// @dev Mining the salt is allowed to buy a vanity address and nothing else. CreateX reads a salt's first
+    ///      20 bytes as a permissioned deployer and the 21st as a cross-chain flag, and a salt naming neither
+    ///      the caller nor the zero address is the case it guards with nothing but `keccak256(abi.encode())`:
+    ///      one address, for everyone, on every chain. The mined bytes sit in that first field, so what pins
+    ///      the gate's address is that this is the branch CreateX takes for it, which is what this holds.
+    ///
+    ///      The single account it does not hold for is the one whose address is the salt's first 20 bytes,
+    ///      which CreateX reads as a permissioned deployment and sends somewhere else. Nothing chooses that
+    ///      account and nothing derives from it, so what it costs is one account out of 2^160 having to let
+    ///      somebody else send the transaction.
+    function testSaltIsPermissionlessAndChainAgnostic() public {
+        // The unguarded derivation is the one this address comes from, and no other
+        assertEq(
+            CreateX.computeCreate2Address(
+                keccak256(abi.encode(DEPLOY_GATE_SALT)), keccak256(DEPLOY_GATE_BYTECODE), CREATEX_ADDRESS
+            ),
+            DEPLOY_GATE_ADDRESS,
+            "the salt should be guarded by nothing but its own hash"
+        );
+
+        // And a stranger, on a chain this repository has never heard of, is who lands it there
+        vm.chainId(block.chainid + 1);
+        vm.prank(makeAddr("anyone"));
+
+        assertEq(
+            CreateX.deployCreate2(DEPLOY_GATE_SALT, DEPLOY_GATE_BYTECODE),
+            DEPLOY_GATE_ADDRESS,
+            "the salt should scope the gate to neither a caller nor a chain"
+        );
+    }
+
     /// @dev The address covers the *init* code, and the same init code can still return different runtime
     ///      code when a constructor reads state. This is what rules that out for the gate: no immutables and
     ///      nothing read, so the init code the address covers determines the runtime code as well

@@ -8,7 +8,7 @@ libs = ['lib']
 # match the consuming repositories on purpose, so that everyone's `type(DeployGate).creationCode` is the same
 # bytes. `testConstantsMatchTheBytecode` is what notices when they stop being.
 solc_version = "0.8.28"
-evm_version = "cancun"
+evm_version = "london"
 
 optimizer = true
 optimizer_runs = 1
