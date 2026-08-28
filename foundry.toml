@@ -8,11 +8,6 @@ libs = ['lib']
 # match the consuming repositories on purpose, so that everyone's `type(DeployGate).creationCode` is the same
 # bytes. `testConstantsMatchTheBytecode` is what notices when they stop being.
 solc_version = "0.8.28"
-
-# London, rather than whatever solc defaults to. The gate is meant to be deployable on any chain that carries
-# CreateX, and a chain a version behind is where a newer target stops being deployable there at all: PUSH0
-# (Shanghai) fails in the constructor, and MCOPY (Cancun) compiles into the runtime and reverts a call that
-# reaches it — a gate at the right address that cannot deploy anything. London emits neither, for 139 bytes.
 evm_version = "london"
 
 optimizer = true
