@@ -118,25 +118,68 @@ Every call is documented in full in [`src/IDeployGate.sol`](src/IDeployGate.sol)
 
 ## Deployments
 
-`0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A`, the same address on every chain, listed machine-readably in
+`0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A`, the same address on all 52, listed machine-readably in
 [`deployments/deployments.json`](deployments/deployments.json).
 
 | Chain | Chain ID | Explorer |
 |---|---|---|
 | Ethereum | `1` | [etherscan.io](https://etherscan.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
 | Optimism | `10` | [optimistic.etherscan.io](https://optimistic.etherscan.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| XDC | `50` | [xdcscan.com](https://xdcscan.com/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
 | BNB Smart Chain | `56` | [bscscan.com](https://bscscan.com/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Gnosis | `100` | [gnosisscan.io](https://gnosisscan.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Fuse | `122` | [explorer.fuse.io](https://explorer.fuse.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Unichain | `130` | [uniscan.xyz](https://uniscan.xyz/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Polygon | `137` | [polygonscan.com](https://polygonscan.com/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
 | Monad | `143` | [monadscan.com](https://monadscan.com/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
-| X Layer | `196` | [oklink.com/xlayer](https://www.oklink.com/xlayer/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Sonic | `146` | [sonicscan.org](https://sonicscan.org/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Hashkey | `177` | [hsk.blockscout.com](https://hsk.blockscout.com/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| X Layer | `196` | [www.oklink.com/xlayer](https://www.oklink.com/xlayer/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| opBNB | `204` | [opbnb.bscscan.com](https://opbnb.bscscan.com/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Fraxtal | `252` | [fraxscan.com](https://fraxscan.com/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| WorldChain | `480` | [worldscan.org](https://worldscan.org/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Stable | `988` | [stablescan.xyz](https://stablescan.xyz/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
 | HyperEVM | `999` | [hyperevmscan.io](https://hyperevmscan.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
-| Pharos | `1672` | [pharosscan.xyz](https://www.pharosscan.xyz/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Lisk | `1135` | [blockscout.lisk.com](https://blockscout.lisk.com/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Story | `1514` | [datanetscan.io](https://datanetscan.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Gravity | `1625` | [explorer.gravity.xyz](https://explorer.gravity.xyz/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Pharos | `1672` | [www.pharosscan.xyz](https://www.pharosscan.xyz/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Metal | `1750` | [explorer.metall2.com](https://explorer.metall2.com/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Injective | `1776` | [blockscout.injective.network](https://blockscout.injective.network/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Kava | `2222` | [kavascan.com](https://kavascan.com/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| GOAT | `2345` | [explorer.goat.network](https://explorer.goat.network/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Morph | `2818` | [explorer.morphl2.io](https://explorer.morphl2.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Peaq | `3338` | [peaq.subscan.io](https://peaq.subscan.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| MegaETH | `4326` | [mega.etherscan.io](https://mega.etherscan.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Robinhood | `4663` | [robinscan.io](https://robinscan.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Superseed | `5330` | [explorer.superseed.xyz](https://explorer.superseed.xyz/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Kaia | `8217` | [kaiascope.com](https://kaiascope.com/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
 | Base | `8453` | [basescan.org](https://basescan.org/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Plasma | `9745` | [plasmascan.to](https://plasmascan.to/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Immutable zkEVM | `13371` | [explorer.immutable.com](https://explorer.immutable.com/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| 0G | `16661` | [chainscan.0g.ai](https://chainscan.0g.ai/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| ApeChain | `33139` | [apescan.io](https://apescan.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Mode | `34443` | [explorer.mode.network](https://explorer.mode.network/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
 | Arbitrum One | `42161` | [arbiscan.io](https://arbiscan.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Arbitrum Nova | `42170` | [nova-explorer.arbitrum.io](https://nova-explorer.arbitrum.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Celo | `42220` | [celoscan.io](https://celoscan.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Etherlink | `42793` | [explorer.etherlink.com](https://explorer.etherlink.com/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Hemi | `43111` | [explorer.hemi.xyz](https://explorer.hemi.xyz/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
 | Avalanche C-Chain | `43114` | [snowtrace.io](https://snowtrace.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Linea | `59144` | [lineascan.build](https://lineascan.build/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| BOB | `60808` | [explorer.gobob.xyz](https://explorer.gobob.xyz/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Berachain | `80094` | [berascan.com](https://berascan.com/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Blast | `81457` | [blastscan.io](https://blastscan.io/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
 | Plume | `98866` | [explorer.plume.org](https://explorer.plume.org/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Katana | `747474` | [katanascan.com](https://katanascan.com/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| XRPL EVM | `1440000` | [explorer.xrplevm.org](https://explorer.xrplevm.org/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Jovay | `5734951` | [explorer.jovay.io/l2](https://explorer.jovay.io/l2/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
+| Zora | `7777777` | [explorer.zora.energy](https://explorer.zora.energy/address/0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A) |
 
-Source is verified on all of them. Most take a plain `forge verify-contract --chain <id>`; Plume is Blockscout,
-and Pharos is a SocialScan explorer, whose endpoint is not the one the explorer's own hostname suggests:
+Source is verified on the great majority; the handful of explorers that expose no working verification API are
+the exceptions. Most chains take a plain `forge verify-contract --chain <id>`, Blockscout instances take
+`--verifier blockscout --verifier-url <explorer>/api`, and a SocialScan explorer answers somewhere neither its
+hostname nor its redirect suggests:
 
 ```console
 forge verify-contract $DEPLOY_GATE_ADDRESS src/DeployGate.sol:DeployGate --verifier blockscout \
