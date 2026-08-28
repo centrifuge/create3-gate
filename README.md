@@ -123,7 +123,7 @@ your own, the way `CreateX.d.sol` is vendored from [createx-forge](https://githu
 Vendoring is enough because nothing outside this repository compiles `DeployGate.sol`: the constants are bytes
 and the address is fixed on chain, so no compiler settings have to match.
 
-The gate is at `0x6A7e0000000a49c0DE4c51F5977b96a5289d3a39` on every chain, as pinned in
+The gate is at `0x6A7E000000007f5bB2913f18AfCfe1B402ce1e4A` on every chain, as pinned in
 `script/DeployGate.d.sol`, and anyone can put it there. It takes no constructor arguments, holds no privilege
 over anything it deploys and has no owner or admin, so there is nothing to configure and no order to get right.
 
