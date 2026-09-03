@@ -211,7 +211,7 @@ The reports are in [`audits/`](audits).
 | Auditor | Findings | Report |
 |---|---|---|
 | Burra Security | 3 informational, all resolved | [2026-08-burraSec.pdf](audits/2026-08-burraSec.pdf) |
-| Sherlock (0x52) | none | [2026-09-Sherlock.pdf](audits/2026-09-Sherlock.pdf) |
+| Sherlock | none | [2026-09-Sherlock.pdf](audits/2026-09-Sherlock.pdf) |
 
 ## License
 
