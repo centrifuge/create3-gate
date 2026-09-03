@@ -204,6 +204,16 @@ cast send 0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed \
 Both constants are in [`script/DeployGate.d.sol`](script/DeployGate.d.sol); no source and no compiler settings
 are involved. It costs about 1.12M gas.
 
+## Audits
+
+The gate has been reviewed twice, both times over `DeployGate.sol` and `Create3.sol`, and neither review found
+an exploitable issue. The reports are in [`audits/`](audits).
+
+| Auditor | Audited | Commit | Findings | Report |
+|---|---|---|---|---|
+| Burra Security | 20 - 21 August 2026 | `2f62f3a` | 3 informational, all resolved | [2026-08-burraSec.pdf](audits/2026-08-burraSec.pdf) |
+| Sherlock (0x52) | 26 - 27 August 2026 | `41e0f70` | none | [2026-09-Sherlock.pdf](audits/2026-09-Sherlock.pdf) |
+
 ## License
 
 MIT, see [LICENSE](LICENSE).
