@@ -208,10 +208,10 @@ are involved. It costs about 1.12M gas.
 
 The reports are in [`audits/`](audits).
 
-| Auditor | Findings | Report |
+| Auditor | Team | Report |
 |---|---|---|
-| Burra Security | 3 informational, all resolved | [2026-08-burraSec.pdf](audits/2026-08-burraSec.pdf) |
-| Sherlock | none | [2026-09-Sherlock.pdf](audits/2026-09-Sherlock.pdf) |
+| Burra Security | Alex Filippov, fuzious, Taridoku | [2026-08-burraSec.pdf](audits/2026-08-burraSec.pdf) |
+| Sherlock | 0x52 | [2026-09-Sherlock.pdf](audits/2026-09-Sherlock.pdf) |
 
 ## License
 
