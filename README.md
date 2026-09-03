@@ -206,8 +206,7 @@ are involved. It costs about 1.12M gas.
 
 ## Audits
 
-The gate has been reviewed twice, both times over `DeployGate.sol` and `Create3.sol`, and neither review found
-an exploitable issue. The reports are in [`audits/`](audits).
+The reports are in [`audits/`](audits).
 
 | Auditor | Audited | Commit | Findings | Report |
 |---|---|---|---|---|
