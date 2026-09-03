@@ -208,10 +208,10 @@ are involved. It costs about 1.12M gas.
 
 The reports are in [`audits/`](audits).
 
-| Auditor | Audited | Commit | Findings | Report |
-|---|---|---|---|---|
-| Burra Security | 20 - 21 August 2026 | `2f62f3a` | 3 informational, all resolved | [2026-08-burraSec.pdf](audits/2026-08-burraSec.pdf) |
-| Sherlock (0x52) | 26 - 27 August 2026 | `41e0f70` | none | [2026-09-Sherlock.pdf](audits/2026-09-Sherlock.pdf) |
+| Auditor | Findings | Report |
+|---|---|---|
+| Burra Security | 3 informational, all resolved | [2026-08-burraSec.pdf](audits/2026-08-burraSec.pdf) |
+| Sherlock (0x52) | none | [2026-09-Sherlock.pdf](audits/2026-09-Sherlock.pdf) |
 
 ## License
 
