@@ -204,6 +204,15 @@ cast send 0xba5Ed099633D3B313e4D5F7bdc1305d3c28ba5Ed \
 Both constants are in [`script/DeployGate.d.sol`](script/DeployGate.d.sol); no source and no compiler settings
 are involved. It costs about 1.12M gas.
 
+## Audits
+
+The reports are in [`audits/`](audits).
+
+| Auditor | Team | Report |
+|---|---|---|
+| Burra Security | Alex Filippov, fuzious, Taridoku | [2026-08-burraSec.pdf](audits/2026-08-burraSec.pdf) |
+| Sherlock | 0x52 | [2026-09-Sherlock.pdf](audits/2026-09-Sherlock.pdf) |
+
 ## License
 
 MIT, see [LICENSE](LICENSE).
